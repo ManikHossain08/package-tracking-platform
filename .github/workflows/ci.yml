@@ -80,6 +80,14 @@ jobs:
         run: make verify
       - name: Integration tests (generator -> Kafka)
         run: make test-it-py
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: sbt
+      - uses: sbt/setup-sbt@2d56c68508d12eef34cb068bac1c8e7f9523bbd9 # v1.5.12
+      - name: Jobs image + containerised processor (AC-7.6)
+        run: make image verify-processor
       - name: Logs on failure
         if: failure()
         run: docker compose --project-directory infra -f infra/docker-compose.yml --env-file .env --profile core logs --no-color

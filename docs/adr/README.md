@@ -9,7 +9,8 @@
 | [0005](0005-watermark-and-lateness.md) | Watermark and lateness policy | Accepted |
 | [0006](0006-sink-topology.md) | Streaming sink topology | Accepted |
 | 0007 | JSON Schema in repo vs schema registry | Planned |
-| 0008 | Airflow vs Dagster for batch and recovery | Planned |
+| [0008](0008-airflow-orchestration.md) | Airflow for batch and recovery orchestration | Accepted |
+| [0009](0009-job-launch-from-airflow.md) | How Airflow launches Spark jobs | Accepted (option A) |
 
 Statuses: Proposed → Accepted → (Superseded by NNNN | Deprecated). Accepted ADRs are not
 edited; they are superseded by a new ADR. New ADRs use [template.md](template.md).

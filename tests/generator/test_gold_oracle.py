@@ -106,3 +106,11 @@ def test_daily_aggregates_and_exception_rate():
             "dwell_p95_min": None,
         }
     ]
+
+
+def test_post_terminal_events_are_predicted():
+    created_ev = created()
+    delivered = ev("DELIVERED", EOD - timedelta(hours=1), "0-m")
+    dup = ev("DELIVERED", EOD - timedelta(hours=1), "0-z")  # same key except a larger event_id
+    gold = expected_gold({PKG: [created_ev, delivered, dup]})
+    assert [a["event_id"] for a in gold["expected_anomalies"]] == ["0-z"]

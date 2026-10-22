@@ -2,7 +2,7 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1–6 are done (step 4 = first vertical slice; step 5 = bronze + replay; step 6 = silver + gold).
+> empty until the step that implements them. Steps 1–6 and 7a are done (4 = first vertical slice; 5 = bronze + replay; 6 = silver + gold; 7a = DQ job + jobs image).
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
@@ -33,7 +33,7 @@
 | FR-OBS-01 | P1 | 01, 04 | — | — | metric contract test | Specified |
 | FR-OBS-02 | P0 | 01, 06 | — | `StructuredLog.scala`, `ptp.events` logger | TS-U-08 ✅, AC-1.8 in TS-R-01 ✅ | ✅ Verified |
 | FR-OBS-03 | P2 | 01 | — | — | — | Specified |
-| FR-DEV-01 | P0 | 01, 08 | 0001 | `Makefile`, `infra/`, `processor/build.sbt` | `SparkRuntimeSmokeSpec` ✅, `make verify` ✅ | ✅ Verified (core profile) |
+| FR-DEV-01 | P0 | 01, 08 | 0001, 0009 | `Makefile`, `infra/`, `processor/build.sbt`, `infra/jobs/` (ptp-jobs image) | `SparkRuntimeSmokeSpec` ✅, `make verify` ✅, `make verify-processor` ✅ (AC-7.6: reconcile + graceful stop, exit 0) | ✅ Verified (core + stream profiles; Airflow in 7b) |
 | FR-DEV-02 | P0 | 01 | — | `.github/workflows/ci.yml` (checks, scala, integration, stack jobs) | CI run pending: no GitHub remote yet | Implemented, not yet run |
 | FR-DEV-03 | P1 | 01 | — | — | CI | Specified |
 | NFR-01 | — | 04 | 0002 | `StatusRule` + SQL mirror | TS-U-05 ✅ (Scala property + SQL property); TS-R-04 pending | ✅ Verified (replay pending) |
@@ -47,4 +47,4 @@
 | NFR-09 | — | 04, 06 | — | — | TS-U-08 | Specified |
 | NFR-10 | — | 04, 09 | — | — | TS-P-01 | Specified |
 | NFR-11 | — | 04, 08 | — | — | config test | Specified |
-| DQ-01..10 | — | 05 | — | DQ-02, DQ-06, DQ-08 asserted in tests | TS-I-05 ✅ (DQ-06), TS-D-04 ✅ (DQ-02), TS-D-03 ✅ (DQ-08); scheduled DQ job (`ops.dq_results`) pending | Partial |
+| DQ-01..10 | — | 05 | SC-0006 | `ptp/lake/DqJob.scala`, `core/dq/DqRules.scala`, migration V6 (`ops.dq_results`, `tracking.status_anomalies`) | TS-D-06 ✅ (clean data passes, anomalies = oracle, idempotent), TS-D-07 ✅ (each of DQ-02…09 catches a planted fault; exit codes), DqRulesSpec ✅ (DQ-10 logic); scheduling via Airflow in 7b | ✅ Verified (DQ-10 only by unit test: needs 7 days of history) |

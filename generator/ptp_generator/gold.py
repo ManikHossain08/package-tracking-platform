@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .model import Event
+from .model import TERMINAL, Event
 from .oracle import expected_status_event
 from .render import format_time
 
@@ -150,7 +150,18 @@ def expected_gold(events_by_package: dict[str, list[Event]]) -> dict[str, list[d
         }
         for d, f in sorted(set(counts) | set(dwell))
     ]
+    # DQ-05 (SC-0006): events ordered after the package's status-defining terminal event.
+    post_terminal = []
+    for es in events_by_package.values():
+        winner = expected_status_event(es)
+        if winner.event_type in TERMINAL:
+            post_terminal += [
+                {"event_id": e.event_id, "package_id": e.package_id, "anomaly_code": "POST_TERMINAL_EVENT"}
+                for e in es
+                if e.ordering_key > winner.ordering_key
+            ]
     return {
+        "expected_anomalies": sorted(post_terminal, key=lambda a: a["event_id"]),
         "expected_delivery_facts": sorted(facts, key=lambda f: f["package_id"]),
         "expected_facility_visits": sorted(
             visits, key=lambda v: (v["package_id"], v["facility_id"], v["arrived_at"])

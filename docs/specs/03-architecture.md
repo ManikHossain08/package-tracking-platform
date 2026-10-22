@@ -91,7 +91,7 @@ Docker Compose with profiles:
 - `obs`: `prometheus`, `grafana`
 - `orchestration`: `airflow` (LocalExecutor, Postgres metadata DB in a separate database)
 
-Running both streaming queries in one driver keeps memory low locally. The trade-off is a
+Since step 7a the driver runs as the `spark-processor` container (profile `stream`, `ptp-jobs` image, ADR-0009), or on the host via `make process`. Running both streaming queries in one driver keeps memory low locally. The trade-off is a
 shared failure domain: a driver OOM stops both queries. In production they would be
 separate applications. ADR-0006 discusses this.
 

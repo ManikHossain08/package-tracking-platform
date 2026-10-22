@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query status reconcile check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query jar image spark-jars stream-up stream-down verify-processor status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -93,6 +93,29 @@ DRY_RUN ?= false
 replay: env ## Replay bronze into Postgres: make replay FROM=yyyy-mm-dd [TO=…] [MODE=as-ingested|backfill] [DRY_RUN=true]
 	set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
 	  sbt -batch "streaming/runMain ptp.streaming.ReplayApp --from $(FROM) --to $(TO) --mode $(MODE) --dry-run $(DRY_RUN)"
+
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+jar: ## Build the jobs assembly jar (Spark and Jackson excluded; Kafka connector + JDBC bundled)
+	cd processor && sbt -batch streaming/assembly
+
+SPARK_IMAGE := apache/spark:4.1.3-scala2.13-java17-ubuntu@sha256:7aab81b306013f40152e720d20e149a0c1f163f27fc17e4e5220bf860bf82aa2
+spark-jars: ## Regenerate infra/jobs/spark-image-jars.txt from the pinned Spark image (after changing the base image)
+	{ echo "# Artifacts provided by the pinned apache/spark base image (regenerate: make spark-jars). Excluded from ptp-jobs.jar."; \
+	  docker run --rm --entrypoint ls $(SPARK_IMAGE) /opt/spark/jars | sed -E 's/-[0-9][0-9A-Za-z.\-]*\.jar$$//; s/_2\.13$$//' | sort -u; \
+	} > infra/jobs/spark-image-jars.txt
+
+image: jar ## Build the ptp-jobs image, tagged with the git commit and :local (ADR-0009)
+	mkdir -p infra/jobs/build && cp processor/streaming/target/scala-2.13/ptp-jobs.jar infra/jobs/build/
+	docker build -q -t ptp-jobs:$(GIT_SHA) -t ptp-jobs:local infra/jobs
+
+stream-up: env ## Run the status processor + bronze writer as the spark-processor container
+	$(COMPOSE) --profile core --profile stream up -d spark-processor
+
+stream-down: ## Stop the spark-processor container gracefully (SIGTERM → queries stop → exit 0)
+	$(COMPOSE) --profile core --profile stream stop spark-processor
+
+verify-processor: ## AC-7.6: containerised processor reconciles a run and stops cleanly (needs make up + image)
+	COMPOSE="$(COMPOSE)" scripts/verify_processor.sh
 
 LAKE_RUN = set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
   sbt -batch "streaming/runMain ptp.lake.LakeApp

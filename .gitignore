@@ -26,3 +26,4 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+infra/jobs/build/

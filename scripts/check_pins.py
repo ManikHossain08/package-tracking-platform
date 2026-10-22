@@ -10,11 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# Images built locally from a Dockerfile in this repo (whose FROM line is itself checked).
+LOCAL_IMAGES = re.compile(r"ptp-[\w-]+:[\w.-]+")
+
+
 def check_images(problems: list[str]) -> None:
-    sources = [ROOT / "infra" / "docker-compose.yml", ROOT / "Makefile"]
-    for path in sources:
+    # One pattern per file type, so e.g. a Makefile target named `image:` is not mistaken for a Compose key.
+    sources = [
+        (ROOT / "infra" / "docker-compose.yml", r"^\s*image:\s*(\S+)"),
+        (ROOT / "Makefile", r"_IMAGE\s*:?=\s*(\S+)"),
+    ]
+    sources += [(p, r"^FROM\s+(\S+)") for p in sorted((ROOT / "infra").glob("**/Dockerfile"))]
+    for path, pattern in sources:
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
-            m = re.search(r"(?:image:|_IMAGE\s*:?=)\s*(\S+)", line)
+            m = re.search(pattern, line)
+            if m and LOCAL_IMAGES.fullmatch(m.group(1)):
+                continue
             if m and not re.fullmatch(r"[\w./-]+:[\w.-]+@sha256:[0-9a-f]{64}", m.group(1)):
                 rel = path.relative_to(ROOT)
                 problems.append(f"{rel}:{lineno}: image not pinned by tag@digest: {m.group(1)}")

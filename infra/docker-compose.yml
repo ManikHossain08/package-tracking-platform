@@ -103,6 +103,35 @@ services:
         limits:
           memory: 512m
 
+  # The status processor + bronze writer as a container (AC-7.6). Build the image first: `make image`.
+  spark-processor:
+    profiles: ["stream"]
+    image: ptp-jobs:local  # built locally from infra/jobs/Dockerfile (pinned base); see `make image`
+    init: true             # forwards SIGTERM to the JVM for a graceful stop
+    command: ["processor"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ptp}
+      PTP_STREAM_WRITER_PASSWORD: ${PTP_STREAM_WRITER_PASSWORD:?run make env}
+      LAKE_ROOT: /data/lake
+      CHECKPOINT_ROOT: /data/checkpoints
+      TRIGGER_INTERVAL_SECONDS: ${TRIGGER_INTERVAL_SECONDS:-5}
+      MAX_OFFSETS_PER_TRIGGER: ${MAX_OFFSETS_PER_TRIGGER:-50000}
+      DRIVER_MEMORY: 2g
+    volumes:
+      - ../data:/data
+    stop_grace_period: 60s
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
 volumes:
   kafka-data:
   postgres-data:

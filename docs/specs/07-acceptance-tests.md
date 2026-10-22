@@ -103,6 +103,25 @@ and the generator's expected-gold files. Silver comparisons ignore `silver_run_i
 | AC-6.9 | **Recompute window:** a late `DELIVERED` whose delivery date is inside the 7-day window changes gold on the next run; facts older than the window are unchanged | FR-ANL-01, FR-LATE-01 | TS-D-03 |
 | AC-6.10 | **SQL query pack:** every query in `sql/analytics/` (on-time %, delay percentiles, dwell, throughput, exception rate) runs as `ptp_reader` and returns hand-computed expected results on a small fixed fixture | FR-ANL-02 | TS-D-05 |
 
+## Step 7 (data-quality job + orchestration) — acceptance criteria
+
+**Scope:** a scheduled DQ job writing `ops.dq_results`; a `ptp-jobs` container image; Airflow running the
+`lake_daily`, `replay_from_bronze` and `maintenance` DAGs. These criteria rely on **ADR-0009** (option A) and **SC-0006**, both approved. Delivered in two parts: 7a = AC-7.1…7.6, 7b = AC-7.7…7.11.
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-7.1 | **One result per check:** a DQ run evaluates DQ-02 … DQ-10 for a window and writes one `ops.dq_results` row per check: `status` ∈ {pass, warn, fail, skipped}, `observed`, `threshold`, `sample` (≤ 10 ids), `run_id`, `window` | DQ-02…10 | TS-D-06 |
+| AC-7.2 | **Clean data passes:** after a dirty generator run through stream → bronze → silver → gold, every check is pass or warn. DQ-10 is `skipped` (with a reason) when there are fewer than 7 days of history. DQ-05's observed count equals the post-terminal events the generator's oracle predicts. | DQ-02…10 | TS-D-06 |
+| AC-7.3 | **Each check catches its fault:** for every check, one planted fault (e.g. a duplicate silver row, a tampered `package_status` row, a gold count off by one, an orphan package, an implausible dwell) makes that check fail or warn, with the planted id in `sample`. The other checks are unaffected. | DQ-02…10 | TS-D-07 |
+| AC-7.4 | **Severity drives the exit code:** any critical `fail` makes the DQ job exit non-zero (so the DAG task fails); warnings alone exit 0 | DQ-02…10 | TS-D-07 |
+| AC-7.5 | **Anomalies:** `ORPHAN_EVENT` and `POST_TERMINAL_EVENT` rows are written to `tracking.status_anomalies`, idempotently (re-running gives the same rows) | DQ-04, DQ-05, FR-DED-03 | TS-D-06 |
+| AC-7.6 | **Packaged jobs:** `make image` builds `ptp-jobs` (pinned Spark base + assembly jar). The status processor runs as the Compose service `spark-processor`, and `docker compose stop` stops it **cleanly** (exit 0, queries stopped), closing the step 4 gap. | FR-DEV-01, NFR-07 | TS-I-07 |
+| AC-7.7 | **Airflow up:** `make up-all` starts Airflow healthy within a bounded wait. Its UI binds to 127.0.0.1 with the admin password from `.env`, and its metadata lives in its own Postgres database and role. | FR-DEV-01, NFR-06 | `make verify-airflow` |
+| AC-7.8 | **DAG integrity:** no import errors. `lake_daily` = silver → gold → dq; `replay_from_bronze` validates its params (dates, mode, dry_run) before launching Spark; `maintenance` has its retention tasks. Every task has retries, a timeout and run-scoped arguments. | FR-DEV-01 | TS-O-01 |
+| AC-7.9 | **End to end:** triggering `lake_daily` on the running stack produces new `ops.gold_runs` and `ops.dq_results` rows and succeeds. With a planted critical fault, the run fails at the dq task. | FR-ANL-01, DQ-* | TS-O-02 |
+| AC-7.10 | **Replay via Airflow:** a `replay_from_bronze` run with params writes an `ops.replay_runs` row; invalid params fail before any Spark job starts | FR-REC-02 | TS-O-02 |
+| AC-7.11 | **Retention (NFR-08):** `maintenance` drops `processed_events` partitions older than 30 days (through a SECURITY DEFINER function) and bronze `ingest_date` partitions older than 90 days. Afterwards bronze stays readable by Spark, the status processor keeps running, and data inside retention is untouched. | NFR-08 | TS-O-03 |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -160,5 +179,8 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-D-03 | Gold equals the generator's independent oracle (facts and daily tables), DQ-08 consistency, idempotent/atomic load, recompute window (AC-6.6–6.9) | FR-ANL-01, DQ-08 | P1 |
 | TS-D-04 | Silver content, dedup rule, typing/lineage, idempotent targeted rebuild, crash before swap, compaction (AC-6.1–6.5) | DQ-02, FR-STO-02 | P1 |
 | TS-D-05 | SQL query pack on a hand-computed fixture, as `ptp_reader` (AC-6.10) | FR-ANL-02 | P1 |
+| TS-D-06 | DQ job on clean data: one result per check, all pass/warn, DQ-10 skipped, anomalies = oracle, idempotent (AC-7.1/7.2/7.5) | DQ-02…10 | P1 |
+| TS-D-07 | DQ fault sequence: each check catches its planted fault, others unchanged; exit codes (AC-7.3/7.4) | DQ-02…09 | P1 |
+| TS-I-07 | Containerised processor: reconcile a run, graceful stop with exit 0 (`make verify-processor`, AC-7.6) | FR-DEV-01 | P1 |
 | TS-P-01 | Throughput/latency benchmark per spec 09 | NFR-10 | P1 |
 | TS-P-02 | 30-min soak at constant rate: heap and state rows plateau | NFR-05 | P1 |

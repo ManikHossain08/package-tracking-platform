@@ -62,7 +62,8 @@ lazy val streaming = (project in file("streaming"))
     name := "ptp-processor-streaming",
     libraryDependencies ++= Seq(
       "org.apache.spark" %% "spark-sql"            % sparkVersion % Provided,
-      "org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion % Provided,
+      // Not in the apache/spark image, so bundled into the jobs jar (ADR-0009).
+      "org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion,
       "org.postgresql"    % "postgresql"           % postgresJdbcVersion,
       "org.testcontainers" % "testcontainers-kafka"      % testcontainersVersion % Test,
       "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test
@@ -78,7 +79,26 @@ lazy val streaming = (project in file("streaming"))
     run / fork := true,
     run / javaOptions ++= sparkJava17Options ++ Seq("-Xmx2g"),
     run / connectInput := false,
-    run / outputStrategy := Some(StdoutOutput)
+    run / outputStrategy := Some(StdoutOutput),
+    // `make jar` → ptp-jobs.jar for the ptp-jobs image. Every artifact the pinned Spark image already ships
+    // (infra/jobs/spark-image-jars.txt: Hadoop, Scala, Jackson, compression codecs…) is left out to avoid
+    // duplicate classes; the Kafka connector, kafka-clients, commons-pool2 and the Postgres driver are bundled.
+    assembly / assemblyJarName := "ptp-jobs.jar",
+    assembly / test := {},
+    assembly / assemblyExcludedJars := {
+      val provided = IO.readLines((ThisBuild / repoRoot).value / "infra" / "jobs" / "spark-image-jars.txt")
+        .filterNot(_.startsWith("#")).toSet
+      def artifact(jar: String) = jar.replaceAll("""-[0-9][0-9A-Za-z.\-]*\.jar$""", "").stripSuffix("_2.13")
+      (assembly / fullClasspath).value.filter(f => provided(artifact(f.data.getName)))
+    },
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", "services", _*)                    => MergeStrategy.filterDistinctLines
+      case PathList("META-INF", xs @ _*) if xs.lastOption.exists(n => n.endsWith(".SF") || n.endsWith(".DSA") || n.endsWith(".RSA")) => MergeStrategy.discard
+      case "module-info.class" | "META-INF/versions/9/module-info.class" => MergeStrategy.discard
+      case PathList("META-INF", "MANIFEST.MF")                     => MergeStrategy.discard
+      case PathList("META-INF", _*)                                => MergeStrategy.first
+      case x                                                       => (assembly / assemblyMergeStrategy).value(x)
+    }
   )
 
 lazy val root = (project in file("."))

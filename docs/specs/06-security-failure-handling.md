@@ -5,7 +5,7 @@
 | Area | Local MVP | Production note (documented, not implemented) |
 |---|---|---|
 | Secrets | `.env` (git-ignored), `.env.example` committed with placeholders; gitleaks in CI | Secret manager; short-lived credentials |
-| Postgres roles | `ptp_migrator` (DDL), `ptp_stream_writer` (DML on `tracking`, `ops`), `ptp_batch_writer` (DML on `analytics`, `ops`, read on `tracking`), `ptp_reader` (SELECT on `analytics`, `tracking`) | Same, plus TLS |
+| Postgres roles | `ptp_migrator` (DDL), `ptp_stream_writer` (DML on `tracking`, `ops`), `ptp_batch_writer` (DML on `analytics`, `ops`, read on `tracking`), `ptp_reader` (SELECT on `analytics`, `tracking`), `ptp_airflow` (own `airflow` database only; SC-0006 B) | Same, plus TLS |
 | Kafka | PLAINTEXT on the Docker network only; **not** exposed beyond localhost | SASL_SSL, ACLs per principal (producer: write `v1`; processor: read `v1`, write DLQ) |
 | Grafana / Airflow | Bound to `127.0.0.1`; admin password from `.env` | SSO |
 | PII | No PII in the contract. The DLQ and bronze hold raw payloads and could contain PII if a producer misbehaves, so their retention is limited (14 d / 90 d) and they are excluded from the `ptp_reader` role. | Field-level scanning of the DLQ |

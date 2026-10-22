@@ -19,7 +19,8 @@ No cloud account and no paid service are needed.
 
 | Profile | Services | Approx. memory (to be measured) |
 |---|---|---|
-| `core` | ✅ kafka, kafka-init, postgres, pg-migrate (Flyway) · processor runs on the host via `make process` · *(planned)* spark-processor container | Limits: Kafka 1 GB (≈410 MiB measured idle), Postgres 512 MB (≈22 MiB idle); Spark driver 2–3 GB planned |
+| `core` | ✅ kafka, kafka-init, postgres, pg-migrate (Flyway) | Kafka 1 GB, Postgres 512 MB limits |
+| `stream` | ✅ spark-processor (`ptp-jobs` image; status processor + bronze writer); alternatively `make process` on the host | 3 GB limit (driver 2 GB) | Limits: Kafka 1 GB (≈410 MiB measured idle), Postgres 512 MB (≈22 MiB idle); Spark driver 2–3 GB planned |
 | `obs` | prometheus, grafana | ~0.5 GB |
 | `orchestration` | airflow (LocalExecutor) | ~2 GB |
 
@@ -47,6 +48,11 @@ No cloud account and no paid service are needed.
 | `make gold [AS_OF=yyyy-mm-dd]` | Load gold for the 7 days ending `AS_OF`; recorded in `ops.gold_runs` | ✅ |
 | `make lake [AS_OF=…]` | Silver then gold | ✅ |
 | `make query Q=01_on_time_rate FROM=… TO=…` | Run a query-pack file as `ptp_reader` | ✅ |
+| `make jar` / `make image` | Assembly jar (without the jars the Spark image ships) / `ptp-jobs:<git sha>` + `:local` image | ✅ |
+| `make stream-up` / `make stream-down` | Status processor + bronze writer as the `spark-processor` container; graceful stop | ✅ |
+| `make verify-processor` | AC-7.6: the container reconciles a run and stops with exit 0 | ✅ |
+| `make spark-jars` | Regenerate `infra/jobs/spark-image-jars.txt` after changing the Spark base image | ✅ |
+| `LakeApp dq` (via `make lake`) | DQ checks → `ops.dq_results`; exit 1 on a critical/high failure | ✅ |
 | `make status` | Status distribution and batch totals from Postgres | ✅ |
 | `make reconcile [RUN=data/generator/x]` | Wait for the processor (bounded), then compare Postgres with a generator manifest | ✅ |
 | `make fixtures` | Regenerate the generator snapshot used by the Scala parity test (TS-C-04) | ✅ |

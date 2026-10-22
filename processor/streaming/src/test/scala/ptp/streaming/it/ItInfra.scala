@@ -139,6 +139,13 @@ object ItInfra {
     }
   }
 
+  /** A minimal valid package event (JSON bytes keyed by package) for hand-planted test data. */
+  def eventJson(pkg: String, tpe: String, at: java.time.Instant, id: String, extra: String = "",
+                system: String = "DC_SCANNER"): (String, Array[Byte]) =
+    pkg -> (s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"$at",""" +
+      s""""emitted_at":"${java.time.Instant.now()}","source":{"system":"$system","device_id":"device-it-01","sequence":1}$extra}""")
+      .getBytes("UTF-8")
+
   // ---- generator -------------------------------------------------------------------------------
 
   final case class Generated(dir: Path, summary: JsonNode, manifest: Map[String, JsonNode]) {

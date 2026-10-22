@@ -192,7 +192,7 @@ object LakeApp {
     val opts = args.drop(1).sliding(2, 2).collect { case Array(k, v) if k.startsWith("--") => k.drop(2) -> v }.toMap
     def fail(msg: String): Nothing = {
       log.error("invalid arguments", "error_code" -> "LAKE_ARGS_INVALID", "error" -> msg,
-        "action" -> "Usage: silver [--from yyyy-MM-dd --to yyyy-MM-dd] | gold [--as-of yyyy-MM-dd] | all [--as-of yyyy-MM-dd]")
+        "action" -> "Usage: silver [--from yyyy-MM-dd --to yyyy-MM-dd] | gold [--as-of yyyy-MM-dd] | dq [--as-of …] | all [--as-of …]")
       sys.exit(2)
     }
     def date(k: String): Option[LocalDate] = opts.get(k).map(v => scala.util.Try(LocalDate.parse(v)).getOrElse(fail(s"--$k must be yyyy-MM-dd")))
@@ -201,11 +201,16 @@ object LakeApp {
       .config("spark.sql.shuffle.partitions", sys.env.getOrElse("SHUFFLE_PARTITIONS", "6"))
       .config("spark.sql.session.timeZone", "UTC").getOrCreate()
     val asOf = date("as-of").getOrElse(LocalDate.now(ZoneOffset.UTC))
-    try args.headOption match {
-      case Some("silver") => SilverBuild.run(spark, config, for (f <- date("from"); t <- date("to")) yield (f, t))
-      case Some("gold")   => GoldLoad.run(spark, config, asOf)
-      case Some("all")    => SilverBuild.run(spark, config); GoldLoad.run(spark, config, asOf)
-      case _              => fail("first argument must be silver, gold or all")
-    } finally spark.stop()
+    def dq(): Int = DqJob.run(spark, config, DqConfig(asOf, java.time.Instant.now(), config.kafkaBootstrapServers,
+      config.eventsTopic, config.dlqTopic)).exitCode
+    val exit =
+      try args.headOption match {
+        case Some("silver") => SilverBuild.run(spark, config, for (f <- date("from"); t <- date("to")) yield (f, t)); 0
+        case Some("gold")   => GoldLoad.run(spark, config, asOf); 0
+        case Some("dq")     => dq()
+        case Some("all")    => SilverBuild.run(spark, config); GoldLoad.run(spark, config, asOf); dq()
+        case _              => fail("first argument must be silver, gold, dq or all")
+      } finally spark.stop()
+    sys.exit(exit) // AC-7.4: a critical/high DQ failure fails the caller (make, Airflow)
   }
 }

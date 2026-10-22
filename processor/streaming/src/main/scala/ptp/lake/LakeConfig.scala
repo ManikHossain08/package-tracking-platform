@@ -3,7 +3,9 @@ package ptp.lake
 import ptp.streaming.JdbcTarget
 
 /** Batch (silver/gold) configuration from the environment (spec 08). */
-final case class LakeConfig(lakeRoot: String, jdbc: JdbcTarget, silverTargetFileBytes: Long, goldWindowDays: Int, goldLookbackDays: Int) {
+final case class LakeConfig(lakeRoot: String, jdbc: JdbcTarget, silverTargetFileBytes: Long, goldWindowDays: Int, goldLookbackDays: Int,
+                            kafkaBootstrapServers: String = "localhost:29092", eventsTopic: String = "package-events.v1",
+                            dlqTopic: String = "package-events.dlq.v1") {
   def bronzePath: String = s"$lakeRoot/bronze/package_events"
   def silverRoot: String = s"$lakeRoot/silver"
   def silverPath: String = s"$silverRoot/package_events"
@@ -24,6 +26,9 @@ object LakeConfig {
         env.getOrElse("POSTGRES_BATCH_WRITER_USER", "ptp_batch_writer"), password),
       silverTargetFileBytes = target,
       goldWindowDays = 7,
-      goldLookbackDays = 30
+      goldLookbackDays = 30,
+      kafkaBootstrapServers = env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092"),
+      eventsTopic = env.getOrElse("EVENTS_TOPIC", "package-events.v1"),
+      dlqTopic = env.getOrElse("DLQ_TOPIC", "package-events.dlq.v1")
     )
 }
