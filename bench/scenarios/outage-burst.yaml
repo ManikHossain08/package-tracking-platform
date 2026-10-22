@@ -1,0 +1,16 @@
+# Paced stream with a simulated producer outage, then a flood (TS-R-06).
+name: outage-burst
+seed: 11
+packages: 2000
+window_end: now
+window_hours: 72
+rate_eps: 200
+duplicate_pct: 2
+out_of_order_pct: 5
+late:
+  pct: 2
+malformed:
+  pct: 1
+outage:
+  at_fraction: 0.4
+  duration_seconds: 30

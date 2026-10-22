@@ -1,4 +1,12 @@
-# Python dev/test dependencies. Lock with `make lock` (uv, hashes, --exclude-newer for reproducibility).
+# Python dependencies (generator runtime + dev/test). Lock with `make lock`
+# (uv, sha256 hashes, --exclude-newer for reproducibility).
+
+# generator runtime
+confluent-kafka
+pyyaml
+tzdata
+
+# dev / test
 pytest
 jsonschema[format-nongpl]
 ruff

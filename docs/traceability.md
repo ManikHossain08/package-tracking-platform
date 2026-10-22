@@ -2,14 +2,14 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Step 1 (setup) is done.
+> empty until the step that implements them. Steps 1 (setup) and 2 (generator) are done.
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
-| FR-GEN-01 | P0 | 01 | — | — | TS-U-06, TS-I-01 | Specified |
-| FR-GEN-02 | P0 | 01, 02 §6 | — | — | TS-U-06 | Specified |
-| FR-GEN-03 | P1 | 01, 02 §6 | — | — | TS-D-02 | Specified |
-| FR-ING-01 | P0 | 01, 02 §1–2 | — | — | TS-C-02, TS-I-01 | Specified |
+| FR-GEN-01 | P0 | 01 | — | `generator/ptp_generator/{lifecycle,config,emit}.py` | TS-U-06 ✅, TS-U-09 ✅, TS-U-12 ✅, TS-I-06 ✅ | ✅ Verified |
+| FR-GEN-02 | P0 | 01, 02 §6 | — | `generator/ptp_generator/{plan,render,emit}.py` | TS-U-10 ✅, TS-U-12 ✅, TS-C-02 ✅ | ✅ Verified |
+| FR-GEN-03 | P1 | 01, 02 §6 | 0004 (SC-0002) | `generator/ptp_generator/{oracle,manifest}.py` | TS-U-11 ✅; TS-D-02 planned | ✅ Verified |
+| FR-ING-01 | P0 | 01, 02 §1–2 | — | `generator/ptp_generator/sinks.py` (KafkaSink) | TS-C-02 ✅, TS-I-06 ✅, sink failure test ✅; TS-I-01 planned | Partial (producer side done) |
 | FR-ING-02 | P1 | 01, 02 §1 | — | `infra/kafka/create-topics.sh`, `infra/docker-compose.yml` | `make verify` (AC-0.2–0.4) | ✅ Verified |
 | FR-VAL-01 | P0 | 01, 02 §2 | — | `contracts/*.schema.json` (processor validation: step 3) | TS-C-01 ✅ `tests/contract/`; TS-U-01, TS-U-02, TS-I-02 planned | Partial |
 | FR-VAL-02 | P0 | 01 | 0005 | — | TS-U-03, TS-I-02 | Specified |

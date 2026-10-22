@@ -1,0 +1,7 @@
+# No faults: the baseline for AC-1.1 (happy path).
+name: clean
+seed: 7
+packages: 100
+window_end: now
+window_hours: 72
+rate_eps: 0

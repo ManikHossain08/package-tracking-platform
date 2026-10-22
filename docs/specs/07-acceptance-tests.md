@@ -37,6 +37,22 @@ Postgres only, the build skeletons, the contract tests and CI. No application lo
 | AC-0.7 | No secrets are committed: `.env` is git-ignored, `.env.example` has placeholders only, and gitleaks finds nothing | NFR-06 | `make secrets-scan`, CI |
 | AC-0.8 | The CI workflow runs pin checks, the secret scan, Python tests, Scala tests and the Compose verification on every push and PR | FR-DEV-02 | Workflow file. A green run requires a GitHub remote, which isn't set up yet. |
 
+## Step 2 (generator) — acceptance criteria
+
+**Scope:** `generator/` Python package, scenario files and manifest. The ground-truth rule
+follows the spec 01 status rule (as amended by SC-0002).
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-2.1 | Same scenario and seed ⇒ identical records (keys, values, order), excluding `emitted_at` and values derived from the emit-time clock. A different seed ⇒ a different stream. | FR-GEN-01 | TS-U-06 |
+| AC-2.2 | Realistic lifecycles: each package starts with `CREATED`; 1–4 facilities, each `ARRIVED` before `DEPARTED`; at most 3 delivery attempts, then `RETURNED_TO_SENDER`; the terminal event is last; true event times strictly increase per package; `promised_delivery_date` = created date (destination tz) + 1/2/4 days for EXPRESS/STANDARD/ECONOMY; no event after the window end | FR-GEN-01 | TS-U-09 |
+| AC-2.3 | Every non-malformed record generated for a 10 000-event scenario passes `package-event.v1.schema.json` | FR-ING-01 | TS-C-02 |
+| AC-2.4 | Every structural malformed record fails the schema. Every runtime malformed record passes the schema, but its `event_time` is beyond the documented bound. Each has the expected primary `error_code` in `malformed.jsonl`. | FR-GEN-02 | TS-C-02 |
+| AC-2.5 | Injected faults are observable and exactly counted: duplicate copies share an `event_id` and appear later; semantic duplicates have a new `event_id` and identical content; out-of-order events are emitted after a later-keyed event of the same package; late events are emitted after the stream's max event time has passed `event_time + delay`. All counts equal `summary.json`. | FR-GEN-02 | TS-U-10 |
+| AC-2.6 | The manifest's expected status per package equals the SC-0002 rule. The oracle is permutation-invariant (property test) and matches hand-written cases. | FR-GEN-03 | TS-U-11 |
+| AC-2.7 | Pacing: at `rate_eps = R`, the send schedule offsets are `i / R`. During a configured outage, records are held and released together at the outage end. `rate_eps = 0` sends unthrottled. | FR-GEN-01, FR-GEN-02 | TS-U-12 |
+| AC-2.8 | The Kafka sink publishes every record to `package-events.v1`, keyed by `package_id`, with `enable.idempotence=true` and `acks=all`. Topic end offsets grow by exactly the emitted count; `delivery.jsonl` has one row per record. | FR-ING-01 | TS-I-06 (needs `make up`) |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -65,6 +81,10 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-U-06 | Generator determinism: same seed ⇒ same stream; manifest agrees with the injected faults | FR-GEN-01/02 | P0 |
 | TS-U-07 | Late-arriving `CREATED` merges shipment attributes without changing status | FR-ORD-01 | P0 |
 | TS-U-08 | Structured log format | FR-OBS-02 | P0 |
+| TS-U-09 | Generator lifecycle realism (AC-2.2) | FR-GEN-01 | P0 |
+| TS-U-10 | Generator fault injection is real and exactly counted (AC-2.5) | FR-GEN-02 | P0 |
+| TS-U-11 | Ground-truth oracle: SC-0002 rule, permutation invariance (AC-2.6) | FR-GEN-03 | P0 |
+| TS-U-12 | Pacing and outage schedule; Kafka sink failure handling (AC-2.7) | FR-GEN-01/02, FR-ING-01 | P0 |
 | TS-C-01 | All valid samples pass and all invalid samples fail the JSON Schema with the expected codes | FR-VAL-01 | P0 |
 | TS-C-02 | 10 000 generated valid events pass the schema | FR-ING-01 | P0 |
 | TS-C-03 | Schema evolution: a v1.1 event with an extra optional field is accepted and preserved in bronze; a `2.0` event goes to the DLQ as `UNSUPPORTED_SCHEMA_VERSION`; a new enum value is rejected until the consumer is upgraded | NFR-04 | P1 |
@@ -72,6 +92,7 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-I-02 | Invalid input → DLQ (AC-1.4) | FR-DLQ-01 | P0 |
 | TS-I-03 | Duplicate delivery within and across micro-batches (AC-1.2) | FR-DED-01 | P0 |
 | TS-I-04 | Out-of-order and late events, including a 3 h-late event behind the watermark (AC-1.3, FR-LATE-01) | FR-ORD-01, FR-LATE-01 | P0/P1 |
+| TS-I-06 | Generator → Kafka: all records published once, keyed by `package_id` (AC-2.8) | FR-ING-01 | P0 |
 | TS-I-05 | Bronze completeness: bronze rows = consumed offsets (read via Spark) | FR-STO-01 | P1 |
 | TS-R-01 | Kill and restart on the checkpoint (AC-1.5) | FR-REC-01 | P0 |
 | TS-R-02 | Postgres down mid-stream: retries counted, the query fails after max attempts with an actionable error, the checkpoint does not advance; after Postgres returns and the processor restarts, the final state = baseline | FR-REC-03 | P1 |

@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it-py generate check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -49,11 +49,21 @@ lock: ## Re-lock Python dev dependencies (needs uv)
 	uv pip compile requirements-dev.in --generate-hashes --python-version 3.12 \
 	  --exclude-newer $(LOCK_EXCLUDE_NEWER) -o requirements-dev.txt
 
-lint: venv ## Lint Python code
-	$(PY) -m ruff check scripts tests
+lint: venv ## Lint and format-check Python code
+	$(PY) -m ruff check scripts tests generator
+	$(PY) -m ruff format --check scripts tests generator
 
 test-py: venv ## Python unit and contract tests
 	$(PY) -m pytest
+
+test-it-py: venv ## Python integration tests against the running stack (needs make up)
+	$(PY) -m pytest -m integration
+
+SCENARIO ?= bench/scenarios/smoke.yaml
+SINK ?= kafka
+OUT ?= data/generator/$(basename $(notdir $(SCENARIO)))
+generate: venv ## Run the generator: make generate [SCENARIO=bench/scenarios/x.yaml] [SINK=kafka|file]
+	PYTHONPATH=generator $(PY) -m ptp_generator --scenario $(SCENARIO) --sink $(SINK) --out-dir $(OUT)
 
 test-scala: ## Scala unit tests, including the Spark smoke test
 	cd processor && sbt -batch test

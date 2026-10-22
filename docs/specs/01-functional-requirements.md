@@ -20,17 +20,26 @@ The letters A–M refer to the original project brief.
 Packages loop through facilities (ARRIVED → DEPARTED repeats per hub), so the rank is
 **only** a tiebreaker for identical event times. It does not define allowed transitions.
 
-### Status ordering rule (ADR-0004)
+### Status ordering rule (ADR-0004, amended by SC-0002)
 
 - **Ordering key** = `(event_time_utc, lifecycle_rank, event_id)`, compared
   lexicographically. It is total and deterministic.
-- An event **becomes the current status** if and only if:
-  1. its ordering key > the stored `status_ordering_key`, and
-  2. the stored status is not terminal.
-- An event that loses the comparison is still recorded (`processed_events`, Parquet)
+- The current status is the **most preferred** event seen so far, under this total
+  preference order (most preferred first):
+  1. any terminal event (`DELIVERED`, `RETURNED_TO_SENDER`) beats any non-terminal event;
+  2. between two terminal events, the **smaller** ordering key wins (the first outcome is sticky);
+  3. between two non-terminal events, the **larger** ordering key wins.
+
+  An incoming event replaces the stored status iff it is preferred over it. Because the
+  result is the maximum under a fixed total order, it does not depend on arrival order,
+  duplicates or batch boundaries (NFR-01).
+- An event that is not preferred is still recorded (`processed_events`, Parquet)
   and increments `event_count`, but it does not change the status.
-- A non-terminal or terminal event with a later key that arrives after a terminal status
-  is recorded as anomaly `POST_TERMINAL_EVENT` (see DQ-05). See open question Q1.
+- Any event whose ordering key is greater than the winning terminal event's key is recorded
+  as anomaly `POST_TERMINAL_EVENT` (see DQ-05), regardless of arrival order.
+
+  *Superseded rule (before SC-0002, 2026-10-21):* "an event becomes the current status iff its
+  key > the stored key and the stored status is not terminal". It depended on arrival order.
 - `CREATED` shipment attributes (`promised_delivery_date`, `service_level`, destination)
   are merged into the status row **whenever** `CREATED` arrives, even if it arrives last.
 

@@ -49,10 +49,11 @@
    1. `COPY`/batch-insert into a temp staging table.
    2. `INSERT INTO tracking.processed_events … ON CONFLICT DO NOTHING RETURNING event_id`.
       This gives the set of events **new** to the platform.
-   3. For the new events only, aggregate per `package_id`: the winning event by ordering key,
-      the count, `CREATED` shipment attributes, and the max `event_time`.
+   3. For the new events only, aggregate per `package_id`: the most preferred event (spec 01
+      status rule), the count, `CREATED` shipment attributes, and the max `event_time`.
    4. `INSERT INTO tracking.package_status … ON CONFLICT (package_id) DO UPDATE`. Status columns
-      are updated via `CASE WHEN (new key) > (stored key) AND stored status not terminal`.
+      are updated via `CASE WHEN (new event is preferred over stored event)`, the same
+      preference order as spec 01 (SC-0002).
       Shipment columns via `COALESCE`. Counters are incremented.
    5. Insert anomalies (`POST_TERMINAL_EVENT`, `SEMANTIC_DUPLICATE`).
    6. Commit.

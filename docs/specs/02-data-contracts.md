@@ -177,3 +177,14 @@ JSON Lines, one record per package: `package_id`, `expected_final_status`,
 `out_of_order`, `late`, `malformed` counts and the event IDs or offsets involved).
 Tests compare pipeline outputs against this manifest; they never re-derive the truth with the
 same code under test.
+
+Additional files in the same output directory (added by SC-0002 part B):
+
+| File | Grain | Content |
+|---|---|---|
+| `manifest.jsonl` | one row per package | As above, plus `expected_status_event_time` and `expected_event_count` |
+| `summary.json` | one per run | Totals: `records_total`, `valid_records`, `unique_valid_events`, `duplicate_copies`, `semantic_duplicates`, `out_of_order`, `late`, `malformed_total`, `malformed_by_error_code`, `expected_status_counts`. Used for exact count reconciliation (KPI-P2). |
+| `malformed.jsonl` | one row per malformed record | `index` (emission order), `key`, `fault_type`, `expected_error_code` |
+| `delivery.jsonl` | one row per record (Kafka sink only) | `index`, `topic`, `partition`, `offset`, written after Kafka acknowledges |
+| `records.jsonl` | one row per record (file sink only) | `index`, `key`, `value` |
+| `run.json` | one per run | `run_id`, sink, record count, duration, achieved events/s (not deterministic) |

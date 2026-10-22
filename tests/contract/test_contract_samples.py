@@ -19,7 +19,8 @@ def _validator(schema_file: str) -> Draft202012Validator:
 EVENT = _validator("package-event.v1.schema.json")
 DLQ = _validator("dlq-record.v1.schema.json")
 EXPECTED = {
-    k: v for k, v in json.loads((SAMPLES / "invalid" / "expected.json").read_text()).items()
+    k: v
+    for k, v in json.loads((SAMPLES / "invalid" / "expected.json").read_text()).items()
     if not k.startswith("_")
 }
 INVALID_FILES = sorted(p.name for p in (SAMPLES / "invalid").iterdir() if p.name != "expected.json")
