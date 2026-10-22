@@ -1,0 +1,18 @@
+{
+  "event_id": "0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9a01",
+  "schema_version": "1.0",
+  "package_id": "PKG-A1B2C3D4E5F6",
+  "event_type": "CREATED",
+  "event_time": "2026-10-19T08:00:00.000Z",
+  "emitted_at": "2026-10-19T08:00:00.120Z",
+  "source": { "system": "ORDER_SYSTEM", "device_id": "order-api-1", "sequence": 1001 },
+  "facility_id": null,
+  "vehicle_id": null,
+  "shipment": {
+    "promised_delivery_date": "2026-10-21",
+    "service_level": "STANDARD",
+    "origin_facility_id": "DC-YUL01",
+    "destination_postal_prefix": "H2X",
+    "destination_timezone": "America/Toronto"
+  }
+}

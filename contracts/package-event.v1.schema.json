@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/contracts/package-event.v1.schema.json",
+  "title": "Package tracking event v1",
+  "description": "Structural contract for topic package-events.v1. Runtime rules (EVENT_TIME_IN_FUTURE, EVENT_TIME_TOO_OLD) are enforced by the processor, not by this schema. See docs/specs/02-data-contracts.md.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["event_id", "schema_version", "package_id", "event_type", "event_time", "emitted_at", "source"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "package_id": { "type": "string", "pattern": "^PKG-[A-Z0-9]{12}$" },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "CREATED", "PICKED_UP", "ARRIVED_AT_FACILITY", "DEPARTED_FACILITY", "OUT_FOR_DELIVERY",
+        "DELIVERY_ATTEMPTED", "EXCEPTION", "DELIVERED", "RETURNED_TO_SENDER"
+      ]
+    },
+    "event_time": { "$ref": "#/$defs/rfc3339WithOffset" },
+    "emitted_at": { "$ref": "#/$defs/rfc3339WithOffset" },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["system", "device_id", "sequence"],
+      "properties": {
+        "system": { "type": "string", "enum": ["DC_SCANNER", "VEHICLE_APP", "ORDER_SYSTEM"] },
+        "device_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "facility_id": { "type": ["string", "null"], "pattern": "^DC-[A-Z]{3}[0-9]{2}$" },
+    "vehicle_id": { "type": ["string", "null"], "pattern": "^VH-[0-9]{6}$" },
+    "shipment": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["promised_delivery_date", "service_level", "origin_facility_id", "destination_postal_prefix", "destination_timezone"],
+      "properties": {
+        "promised_delivery_date": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "service_level": { "type": "string", "enum": ["ECONOMY", "STANDARD", "EXPRESS"] },
+        "origin_facility_id": { "type": "string", "pattern": "^DC-[A-Z]{3}[0-9]{2}$" },
+        "destination_postal_prefix": { "type": "string", "pattern": "^[A-Z0-9]{3}$" },
+        "destination_timezone": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "exception_code": { "type": "string", "pattern": "^[A-Z_]{3,40}$" },
+        "attempt_number": { "type": "integer", "minimum": 1, "maximum": 5 }
+      }
+    },
+    "attributes": {
+      "type": "object",
+      "maxProperties": 20,
+      "additionalProperties": { "type": "string", "maxLength": 256 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_type": { "const": "CREATED" } }, "required": ["event_type"] },
+      "then": { "required": ["shipment"] }
+    },
+    {
+      "if": { "properties": { "event_type": { "enum": ["ARRIVED_AT_FACILITY", "DEPARTED_FACILITY", "RETURNED_TO_SENDER"] } }, "required": ["event_type"] },
+      "then": { "required": ["facility_id"], "properties": { "facility_id": { "type": "string" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "enum": ["OUT_FOR_DELIVERY", "DELIVERY_ATTEMPTED", "DELIVERED"] } }, "required": ["event_type"] },
+      "then": { "required": ["vehicle_id"], "properties": { "vehicle_id": { "type": "string" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "PICKED_UP" } }, "required": ["event_type"] },
+      "then": {
+        "anyOf": [
+          { "required": ["vehicle_id"], "properties": { "vehicle_id": { "type": "string" } } },
+          { "required": ["facility_id"], "properties": { "facility_id": { "type": "string" } } }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "EXCEPTION" } }, "required": ["event_type"] },
+      "then": { "required": ["details"], "properties": { "details": { "required": ["exception_code"] } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "DELIVERY_ATTEMPTED" } }, "required": ["event_type"] },
+      "then": { "required": ["details"], "properties": { "details": { "required": ["attempt_number"] } } }
+    }
+  ],
+  "$defs": {
+    "rfc3339WithOffset": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?(Z|[+-]\\d{2}:\\d{2})$"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "event_id": "0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9a02",
+  "schema_version": "1.0",
+  "package_id": "PKG-A1B2C3D4E5F6",
+  "event_type": "ARRIVED_AT_FACILITY",
+  "event_time": "2026-10-19T14:05:31.250-04:00",
+  "emitted_at": "2026-10-19T18:05:32.000Z",
+  "source": { "system": "DC_SCANNER", "device_id": "scanner-YUL01-07", "sequence": 88231 },
+  "facility_id": "DC-YUL01",
+  "vehicle_id": null
+}

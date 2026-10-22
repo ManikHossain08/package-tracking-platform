@@ -1,0 +1,18 @@
+{
+  "dlq_schema_version": "1.0",
+  "error_code": "UNKNOWN_EVENT_TYPE",
+  "errors": [
+    { "code": "UNKNOWN_EVENT_TYPE", "field": "/event_type", "message": "event_type 'TELEPORTED' is not one of the 9 allowed values" }
+  ],
+  "raw_value": "{\"event_id\":\"0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9b03\",\"event_type\":\"TELEPORTED\"}",
+  "raw_value_encoding": "utf8",
+  "source": {
+    "topic": "package-events.v1",
+    "partition": 4,
+    "offset": 182734,
+    "kafka_timestamp": "2026-10-19T09:00:01.050Z",
+    "key": "PKG-A1B2C3D4E5F6"
+  },
+  "processor": { "name": "status-processor", "version": "0.1.0", "run_id": "3f6c1e0a-run", "batch_id": 42 },
+  "rejected_at": "2026-10-19T09:00:03.200Z"
+}

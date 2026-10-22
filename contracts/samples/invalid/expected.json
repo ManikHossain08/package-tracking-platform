@@ -1,0 +1,11 @@
+{
+  "_comment": "Expected primary error_code per invalid sample (FR-VAL-01, AC-1.4). Runtime-rule cases (EVENT_TIME_IN_FUTURE, EVENT_TIME_TOO_OLD) are generated relative to processing time inside tests, not stored as fixtures.",
+  "invalid_json.txt": "INVALID_JSON",
+  "not_json_object.json": "NOT_JSON_OBJECT",
+  "missing_package_id.json": "MISSING_REQUIRED_FIELD",
+  "unknown_event_type.json": "UNKNOWN_EVENT_TYPE",
+  "timestamp_missing_offset.json": "TIMESTAMP_MISSING_OFFSET",
+  "arrival_missing_facility.json": "MISSING_CONDITIONAL_FIELD",
+  "bad_package_id_format.json": "INVALID_FORMAT",
+  "unsupported_schema_version.json": "UNSUPPORTED_SCHEMA_VERSION"
+}

@@ -1,0 +1,10 @@
+{
+  "event_id": "0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9a04",
+  "schema_version": "1.0",
+  "package_id": "PKG-A1B2C3D4E5F6",
+  "event_type": "OUT_FOR_DELIVERY",
+  "event_time": "2026-10-21T12:30:00Z",
+  "emitted_at": "2026-10-21T12:30:02Z",
+  "source": { "system": "VEHICLE_APP", "device_id": "vh-app-000123", "sequence": 5521 },
+  "vehicle_id": "VH-000123"
+}

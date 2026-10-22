@@ -1,0 +1,12 @@
+{
+  "event_id": "0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9a05",
+  "schema_version": "1.1",
+  "package_id": "PKG-A1B2C3D4E5F6",
+  "event_type": "DELIVERED",
+  "event_time": "2026-10-21T15:42:10.123456Z",
+  "emitted_at": "2026-10-21T15:47:00Z",
+  "source": { "system": "VEHICLE_APP", "device_id": "vh-app-000123", "sequence": 5530 },
+  "vehicle_id": "VH-000123",
+  "proof_of_delivery_type": "PHOTO",
+  "attributes": { "door": "front" }
+}

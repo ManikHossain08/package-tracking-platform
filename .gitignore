@@ -1,0 +1,28 @@
+# Secrets and local config
+.env
+*.pem
+*.key
+
+# Local data produced by the stack
+data/
+checkpoints/
+bench/results/raw/
+
+# Scala / sbt
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.bloop/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

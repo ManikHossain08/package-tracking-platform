@@ -1,0 +1,10 @@
+{
+  "event_id": "0192a6b4-1c2d-7e3f-8a4b-5c6d7e8f9b04",
+  "schema_version": "1.0",
+  "package_id": "PKG-A1B2C3D4E5F6",
+  "event_type": "DEPARTED_FACILITY",
+  "event_time": "2026-10-19T15:00:00",
+  "emitted_at": "2026-10-19T19:00:01Z",
+  "source": { "system": "DC_SCANNER", "device_id": "scanner-YUL01-07", "sequence": 88240 },
+  "facility_id": "DC-YUL01"
+}
