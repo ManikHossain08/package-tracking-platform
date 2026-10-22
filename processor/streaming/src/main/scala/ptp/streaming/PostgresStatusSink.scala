@@ -191,6 +191,31 @@ object PostgresStatusSink {
       }
     }
 
+  def startReplay(target: JdbcTarget, runId: String, r: ReplayRequest, startedAt: Instant): Unit =
+    Using.resource(connect(target)) { conn =>
+      Using.resource(conn.prepareStatement(
+        """INSERT INTO ops.replay_runs (run_id, ingest_date_from, ingest_date_to, mode, dry_run, status, started_at)
+          |VALUES (?, ?, ?, ?, ?, 'running', ?)""".stripMargin)) { ps =>
+        ps.setString(1, runId); ps.setObject(2, r.from); ps.setObject(3, r.to); ps.setString(4, r.mode.name)
+        ps.setBoolean(5, r.dryRun); ps.setObject(6, utc(startedAt)); ps.executeUpdate()
+      }
+    }
+
+  def finishReplay(target: JdbcTarget, runId: String, counts: Option[ApplyCounts], finishedAt: Instant, error: Option[String]): Unit =
+    Using.resource(connect(target)) { conn =>
+      Using.resource(conn.prepareStatement(
+        """UPDATE ops.replay_runs SET status = ?, finished_at = ?, input_rows = ?, valid_rows = ?, rejected_rows = ?,
+          |  applied_rows = ?, duplicate_rows = ?, error = ? WHERE run_id = ?""".stripMargin)) { ps =>
+        ps.setString(1, if (error.isEmpty) "succeeded" else "failed"); ps.setObject(2, utc(finishedAt))
+        Seq(counts.map(_.input), counts.map(_.valid), counts.map(_.rejected), counts.map(_.applied), counts.map(_.duplicates))
+          .zipWithIndex.foreach {
+            case (Some(v), i) => ps.setLong(3 + i, v)
+            case (None, i)    => ps.setNull(3 + i, Types.BIGINT)
+          }
+        setText(ps, 8, error); ps.setString(9, runId); ps.executeUpdate()
+      }
+    }
+
   private def utc(i: Instant): OffsetDateTime = OffsetDateTime.ofInstant(i, ZoneOffset.UTC)
 
   private def setText(ps: PreparedStatement, i: Int, v: Option[String]): Unit =

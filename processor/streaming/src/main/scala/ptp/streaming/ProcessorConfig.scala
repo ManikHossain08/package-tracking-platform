@@ -16,6 +16,8 @@ final case class ProcessorConfig(
     dlqTopic: String,
     jdbc: JdbcTarget,
     checkpointRoot: String,
+    lakeRoot: String,
+    bronzeEnabled: Boolean,
     queryName: String,
     triggerIntervalSeconds: Long,
     maxOffsetsPerTrigger: Long,
@@ -25,6 +27,7 @@ final case class ProcessorConfig(
     processorVersion: String
 ) {
   def checkpointLocation: String = s"$checkpointRoot/$queryName"
+  def bronzePath: String         = s"$lakeRoot/bronze/package_events"
 }
 
 object ProcessorConfig {
@@ -56,6 +59,8 @@ object ProcessorConfig {
       jdbc = JdbcTarget(get("POSTGRES_JDBC_URL", "jdbc:postgresql://localhost:55432/ptp"),
         get("POSTGRES_STREAM_WRITER_USER", "ptp_stream_writer"), password),
       checkpointRoot = get("CHECKPOINT_ROOT", "data/checkpoints"),
+      lakeRoot = get("LAKE_ROOT", "data/lake"),
+      bronzeEnabled = get("BRONZE_ENABLED", "true").toLowerCase != "false",
       queryName = get("QUERY_NAME", "status-processor"),
       triggerIntervalSeconds = trigger,
       maxOffsetsPerTrigger = maxOffs,

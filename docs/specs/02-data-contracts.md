@@ -8,6 +8,10 @@ them and specifies the storage contracts (Postgres, Parquet) that do not have a 
 | Topic | Key | Value | Partitions | Retention | Cleanup | Writer |
 |---|---|---|---|---|---|---|
 | `package-events.v1` | `package_id` (UTF-8) | package-event v1 JSON | 6 | 7 days | delete | generator / producers |
+
+`package-events.v1` uses `message.timestamp.type=LogAppendTime`: the broker stamps each record's
+**ingest time**, which is the clock for the runtime time bounds (SC-0004). Producers can't set it.
+
 | `package-events.dlq.v1` | original key or null | dlq-record v1 JSON | 3 | 14 days | delete | status-processor |
 
 Six partitions allow up to 6 parallel Spark tasks locally. The partition count is part of
@@ -68,7 +72,8 @@ Precedence (the first one listed is the primary `error_code`):
 13. `EVENT_TIME_IN_FUTURE` — runtime rule FR-VAL-02
 14. `EVENT_TIME_TOO_OLD` — runtime rule FR-VAL-02, live mode only
 
-Codes 1–12 are structural and also expressible in JSON Schema. Codes 13–14 depend on
+Codes 1–12 are structural and also expressible in JSON Schema. Codes 13–14 depend on the record's
+ingest time (Kafka `LogAppendTime`, SC-0004), not on when it is processed, and
 processing time and exist only in the processor's validation code.
 
 **Validation details** (clarifications made while implementing step 3; none changes a code above):
@@ -84,7 +89,7 @@ processing time and exist only in the processor's validation code.
 - Semantic checks the JSON Schema cannot express are `INVALID_FORMAT`: an impossible
   calendar date in `promised_delivery_date`, and a `destination_timezone` that is not a
   known IANA zone. An impossible date-time in `event_time`/`emitted_at` (e.g. month 13) is `INVALID_TIMESTAMP`.
-- Time bounds are inclusive: `event_time = now + 5 min` and (live) `now − 30 d` are accepted.
+- Time bounds are inclusive: `event_time = ingest_time + 5 min` and (live) `ingest_time − 30 d` are accepted.
 
 ## 3. DLQ record v1 — `contracts/dlq-record.v1.schema.json`
 
@@ -151,6 +156,12 @@ It is a `SECURITY DEFINER` function owned by the migrator, so the stream writer 
 Codes: `POST_TERMINAL_EVENT`, `ORPHAN_EVENT` (no `CREATED` after 24 h, written by the DQ job),
 `SEMANTIC_DUPLICATE`.
 
+### `ops.replay_runs` — grain: one row per replay run
+
+`run_id`, `ingest_date_from`/`to`, `mode` (`as-ingested` \| `backfill`), `dry_run`, `status`
+(`running` → `succeeded` \| `failed`), timings, counts (input/valid/rejected/applied/duplicate) and `error`.
+Rows a replay inserts into `processed_events` have `first_batch_id = -1`.
+
 ### `ops.sink_batches` — grain: one row per (`query_name`, `batch_id`)
 
 `started_at`, `committed_at`, `input_rows`, `applied_rows`, `duplicate_rows`, `rejected_rows`,
@@ -175,7 +186,7 @@ Root: `${LAKE_ROOT}` (local default `./data/lake`).
 
 | Layer | Path | Partition | Writer | Content |
 |---|---|---|---|---|
-| Bronze | `bronze/package_events/ingest_date=YYYY-MM-DD/` | `ingest_date` (UTC date of Kafka timestamp) | bronze-writer stream (Spark file sink) | All consumed records: `kafka_topic`, `kafka_partition`, `kafka_offset`, `kafka_timestamp`, `kafka_key`, `raw_value`, `is_valid`, `error_codes[]`, best-effort parsed `event_id`, `package_id`, `event_type`, `event_time`, `processor_version` |
+| Bronze | `bronze/package_events/ingest_date=YYYY-MM-DD/` | `ingest_date` (UTC date of the Kafka `LogAppendTime`) | bronze-writer stream (Spark file sink) | All consumed records: `kafka_topic`, `kafka_partition`, `kafka_offset`, `kafka_timestamp` (timestamp), `kafka_key` (binary), `raw_value` (binary), `is_valid`, `error_codes[]` (primary first, then by precedence), best-effort parsed `event_id`, `package_id`, `event_type`, `event_time`, `processor_version` |
 | Silver | `silver/package_events/event_date=YYYY-MM-DD/` | `event_date` (UTC) | Airflow batch job | Valid, typed, deduplicated by `event_id` (earliest `kafka_timestamp` wins), all contract fields flattened, plus `content_hash` |
 | Gold | Postgres `analytics.*` | — | Airflow batch job | See §4 |
 
@@ -183,6 +194,9 @@ Root: `${LAKE_ROOT}` (local default `./data/lake`).
 and late events must not rewrite old partitions. Partitioning by ingest date keeps bronze
 append-only and makes "replay what arrived on day X" a partition read.
 Silver uses `event_date` because analytics query by event time.
+
+`kafka_key` and `raw_value` are stored as **binary** so payloads that are not UTF-8 survive byte for byte (AC-5.2).
+`is_valid` is judged at ingest time (SC-0004), so it always agrees with the DLQ.
 
 **Reader rule:** bronze is written by the Spark file sink. It is only consistent when read
 through Spark, which honours `_spark_metadata`. Other engines globbing the directory may

@@ -1,6 +1,6 @@
 # ADR-0005: Watermark and lateness policy
 
-- **Status:** Accepted (2026-10-21)
+- **Status:** Accepted (2026-10-21); clock amended by SC-0004 (2026-10-22)
 - **Requirements:** FR-LATE-01, FR-DED-02, FR-VAL-02, FR-ANL-01, NFR-05
 
 ## Context
@@ -19,8 +19,8 @@ Separate the concerns:
 | Status correctness for late events | Postgres ordering guard; no watermark involved | Any lateness |
 | Durable dedup horizon | `processed_events` retention | 30 d |
 | Gold correctness for late events | Batch recompute of the last N event-dates | 7 d |
-| Reject implausible clocks | `event_time > now + skew` | 5 min |
-| Reject stale garbage in live mode | `event_time < now − max_age` (disabled in replay) | 30 d |
+| Reject implausible clocks | `event_time > ingest_time + skew` | 5 min |
+| Reject stale garbage in live mode | `event_time < ingest_time − max_age` (disabled in backfill) | 30 d |
 
 Events behind the watermark are counted (`ptp_events_late_total`) and still applied.
 `dropDuplicatesWithinWatermark` may let duplicates of very late events through to the sink,
@@ -39,3 +39,11 @@ where `processed_events` absorbs them.
   "provisional" until the window closes.
 - The values are configuration (spec 08) and are revisited after the benchmark's lateness
   distribution analysis.
+
+## Amendment 1 — validation clock = ingest time (SC-0004, accepted 2026-10-22)
+
+The time bounds are judged against the record's Kafka `LogAppendTime` (ingest time), not the consumer's
+processing time. That makes every query, re-run and replay take the same decision for a record, and a
+consumer outage or lag can no longer turn valid events into `EVENT_TIME_TOO_OLD`. Replay from bronze
+reproduces live decisions by default. Backfill mode (lower bound off) is opt-in.
+Details: `docs/spec-changes/0004-validation-clock-ingest-time.md`.

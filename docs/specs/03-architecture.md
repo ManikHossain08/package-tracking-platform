@@ -80,7 +80,7 @@ Correctness relies on the idempotency of step 4, not on batch-level atomicity. S
 | DAG | Schedule | Steps |
 |---|---|---|
 | `lake_daily` | Hourly (local), parameterised window | `silver_build(ingest window → affected event_dates)` → `gold_load(last 7 days)` → `dq_checks` → `reconcile_status` |
-| `replay_from_bronze` | Manual, params: `ingest_date_from`, `ingest_date_to`, `dry_run` | Read bronze → `processor-core` validate/apply in **replay mode** → Postgres (same SQL) → report counts |
+| `replay_from_bronze` | Manual, params: `ingest_date_from`, `ingest_date_to`, `mode`, `dry_run` | Read bronze → `StatusApply` (the same classify/apply code as the stream) → Postgres → `ops.replay_runs`. Mode `as-ingested` (default) reproduces live decisions (SC-0004); `backfill` disables the age bound. Available now as `make replay`; the DAG wraps it when Airflow lands. |
 | `maintenance` | Daily | Drop expired `processed_events` partitions; Parquet retention per spec 04 |
 
 ## Deployment view (local)

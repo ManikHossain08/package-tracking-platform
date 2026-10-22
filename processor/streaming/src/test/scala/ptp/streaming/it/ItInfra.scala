@@ -77,7 +77,7 @@ object ItInfra {
   def writer: JdbcTarget  = JdbcTarget(postgres.getJdbcUrl, "ptp_stream_writer", Passwords("ptp_stream_writer"))
 
   def reset(): Unit = Using.resource(admin()) { c =>
-    c.createStatement().execute("TRUNCATE tracking.package_status, tracking.processed_events, ops.sink_batches")
+    c.createStatement().execute("TRUNCATE tracking.package_status, tracking.processed_events, ops.sink_batches, ops.replay_runs")
   }
 
   // ---- Kafka ----------------------------------------------------------------------------------
@@ -90,7 +90,8 @@ object ItInfra {
     val n = topicSeq.incrementAndGet()
     val t = Topics(s"it-events-$n", s"it-dlq-$n")
     Using.resource(AdminClient.create(Map[String, AnyRef]("bootstrap.servers" -> kafka.getBootstrapServers).asJava)) { admin =>
-      admin.createTopics(Seq(new NewTopic(t.events, 6, 1.toShort), new NewTopic(t.dlq, 3, 1.toShort)).asJava).all().get(60, TimeUnit.SECONDS)
+      val events = new NewTopic(t.events, 6, 1.toShort).configs(Map("message.timestamp.type" -> "LogAppendTime").asJava) // SC-0004
+      admin.createTopics(Seq(events, new NewTopic(t.dlq, 3, 1.toShort)).asJava).all().get(60, TimeUnit.SECONDS)
       // Bounded wait until every partition has a leader, so the first produce does not hit stale metadata.
       val deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos
       def ready = admin.describeTopics(Seq(t.events, t.dlq).asJava).allTopicNames().get(10, TimeUnit.SECONDS)
@@ -173,6 +174,8 @@ object ItInfra {
     dlqTopic = t.dlq,
     jdbc = writer,
     checkpointRoot = Files.createTempDirectory("ptp-it-ckpt-").toString,
+    lakeRoot = Files.createTempDirectory("ptp-it-lake-").toString,
+    bronzeEnabled = true,
     queryName = "status-processor",
     triggerIntervalSeconds = 1,
     maxOffsetsPerTrigger = maxOffsetsPerTrigger,
@@ -187,6 +190,53 @@ object ItInfra {
     val q = processor.start(Trigger.AvailableNow())
     try require(q.awaitTermination(timeout.toMillis), s"query did not finish within $timeout")
     finally if (q.isActive) q.stop()
+  }
+
+  /** Runs the status processor and the bronze writer side by side until both have consumed the topic. */
+  def runBothToEnd(cfg: ProcessorConfig, timeout: Duration = Duration.ofMinutes(3)): Unit = {
+    val queries = Seq(new StatusProcessor(spark, cfg).start(Trigger.AvailableNow()), new BronzeWriter(spark, cfg).start(Trigger.AvailableNow()))
+    try queries.foreach(q => require(q.awaitTermination(timeout.toMillis), s"${q.name} did not finish within $timeout"))
+    finally queries.filter(_.isActive).foreach(_.stop())
+  }
+
+  def runBronzeToEnd(cfg: ProcessorConfig, timeout: Duration = Duration.ofMinutes(3)): Unit = {
+    val q = new BronzeWriter(spark, cfg).start(Trigger.AvailableNow())
+    try require(q.awaitTermination(timeout.toMillis), s"bronze-writer did not finish within $timeout")
+    finally if (q.isActive) q.stop()
+  }
+
+  /** Every record of a topic as raw bytes, keyed by (partition, offset). Bounded by the end offsets. */
+  def readRaw(topic: String, timeout: Duration = Duration.ofSeconds(60)): Map[(Int, Long), (Array[Byte], Array[Byte])] = {
+    val props = new Properties()
+    props.put("bootstrap.servers", kafka.getBootstrapServers)
+    props.put("enable.auto.commit", "false")
+    Using.resource(new KafkaConsumer[Array[Byte], Array[Byte]](props, new ByteArrayDeserializer, new ByteArrayDeserializer)) { c =>
+      val parts = c.partitionsFor(topic).asScala.map(p => new TopicPartition(topic, p.partition())).asJava
+      c.assign(parts)
+      c.seekToBeginning(parts)
+      val total    = c.endOffsets(parts).values().asScala.map(_.longValue).sum
+      val out      = Map.newBuilder[(Int, Long), (Array[Byte], Array[Byte])]
+      var read     = 0L
+      val deadline = System.nanoTime() + timeout.toNanos
+      while (read < total && System.nanoTime() < deadline)
+        c.poll(java.time.Duration.ofMillis(500)).asScala.foreach { r => out += (r.partition(), r.offset()) -> (r.key(), r.value()); read += 1 }
+      require(read == total, s"read $read of $total records from $topic within $timeout")
+      out.result()
+    }
+  }
+
+  /** Full content of the tracking tables as text, for byte-for-byte comparisons (AC-5.5). */
+  def snapshot(): (Seq[String], Seq[String]) = Using.resource(admin()) { c =>
+    def rows(sql: String) = {
+      val rs = c.createStatement().executeQuery(sql)
+      val n  = rs.getMetaData.getColumnCount
+      Iterator.continually(rs).takeWhile(_.next()).map(r => (1 to n).map(i => String.valueOf(r.getObject(i))).mkString("|")).toVector
+    }
+    (rows("SELECT * FROM tracking.package_status ORDER BY package_id"), rows("SELECT * FROM tracking.processed_events ORDER BY event_id"))
+  }
+
+  def truncateTracking(): Unit = Using.resource(admin()) { c =>
+    c.createStatement().execute("TRUNCATE tracking.package_status, tracking.processed_events")
   }
 
   // ---- Postgres readback ----------------------------------------------------------------------

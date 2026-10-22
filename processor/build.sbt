@@ -73,6 +73,7 @@ lazy val streaming = (project in file("streaming"))
     Test / envVars ++= sys.env.get("DOCKER_HOST").map("DOCKER_HOST" -> _).toMap,
     // `make process`: run with Spark (Provided) on the classpath, forked with the Java 17 flags.
     Compile / run := Defaults.runTask(Compile / fullClasspath, Compile / run / mainClass, Compile / run / runner).evaluated,
+    Compile / runMain := Defaults.runMainTask(Compile / fullClasspath, Compile / run / runner).evaluated,
     Compile / run / mainClass := Some("ptp.streaming.StatusProcessorApp"),
     run / fork := true,
     run / javaOptions ++= sparkJava17Options ++ Seq("-Xmx2g"),

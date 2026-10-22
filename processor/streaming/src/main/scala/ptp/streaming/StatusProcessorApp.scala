@@ -20,8 +20,11 @@ object StatusProcessorApp {
       .master(sys.env.getOrElse("SPARK_MASTER", "local[*]"))
       .config("spark.sql.shuffle.partitions", sys.env.getOrElse("SHUFFLE_PARTITIONS", "6"))
       .getOrCreate()
-    val query = new StatusProcessor(spark, config, log = log).start(Trigger.ProcessingTime(s"${config.triggerIntervalSeconds} seconds"))
-    sys.addShutdownHook { if (query.isActive) query.stop() }
-    query.awaitTermination()
+    val trigger = Trigger.ProcessingTime(s"${config.triggerIntervalSeconds} seconds")
+    // ADR-0006: both queries in one driver locally; each has its own checkpoint and fails independently.
+    val queries = Seq(new StatusProcessor(spark, config, log = log).start(trigger)) ++
+      (if (config.bronzeEnabled) Seq(new BronzeWriter(spark, config).start(trigger)) else Nil)
+    sys.addShutdownHook { queries.filter(_.isActive).foreach(_.stop()) }
+    spark.streams.awaitAnyTermination() // if either query fails, the app exits non-zero and both restart together
   }
 }

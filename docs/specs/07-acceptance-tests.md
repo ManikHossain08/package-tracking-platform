@@ -68,6 +68,22 @@ rejection with error codes. No Spark, Kafka or JDBC. Rules: spec 02 §2.
 | AC-3.6 | Accepted events are faithfully typed: `event_time` with any offset is normalised to the same UTC instant; microsecond precision is kept; optional and conditional fields map to `Option`s | FR-VAL-01 | TS-U-13 |
 | AC-3.7 | `processor-core` has no Spark, Kafka or JDBC on its classpath (spec 03). Its JSON library version equals Spark 4.1.3's (Jackson 2.21.2) to avoid runtime conflicts. | spec 03, NFR-07 | TS-U-14 |
 
+## Step 5 (bronze Parquet + replay) — acceptance criteria
+
+**Scope:** query B of ADR-0006 (`bronze-writer`: Kafka → Parquet file sink) running beside the status
+processor in the same driver, and a replay job (bronze → same validation and apply code → Postgres).
+AC-5.2, AC-5.5 and AC-5.6 rely on **SC-0004** (approved): time bounds are judged at Kafka ingest time.
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-5.1 | **Completeness:** after a dirty generator run is consumed, bronze (read through Spark, which honours `_spark_metadata`) holds exactly one row per Kafka record, valid and invalid alike: its `(partition, offset)` set equals `delivery.jsonl` | FR-STO-01 | TS-I-05 |
+| AC-5.2 | **Fidelity and agreement:** `raw_value` and `kafka_key` are byte-identical to what was produced (stored as binary, lossless). Bronze rows with `is_valid = false` are exactly the DLQ's source offsets, with the same primary error code (DQ-06). | FR-STO-01, DQ-06 | TS-I-05 |
+| AC-5.3 | **Layout:** files live under `bronze/package_events/ingest_date=YYYY-MM-DD/`, where the date is the UTC date of the Kafka timestamp. A read filtered on `ingest_date` prunes partitions (the plan shows a partition filter). | FR-STO-01 | TS-I-05 |
+| AC-5.4 | **Exactly-once files under re-run:** remove the checkpoint commit of the last batch (simulating a crash after the files were written but before the checkpoint commit), then restart → the batch is re-executed and bronze row count and content are unchanged | FR-STO-01, NFR-02 | TS-R-08 |
+| AC-5.5 | **Replay is idempotent:** after the stream has applied a dirty run, replaying its ingest-date range (once, then again) leaves `tracking.package_status` and `tracking.processed_events` byte-for-byte unchanged | FR-REC-02, NFR-01 | TS-R-04 |
+| AC-5.6 | **Replay restores state:** after the tracking tables are emptied (simulated Postgres data loss), replaying bronze rebuilds `package_status` equal to the generator manifest (RPO 0 for data in bronze, NFR-03). Replaying 31 days later (simulated clock) gives the same result. | FR-REC-02, NFR-03 | TS-R-04 |
+| AC-5.7 | **Replay is observable and safe:** each run is recorded in `ops.replay_runs` (range, mode, counts, timings); `--dry-run` validates and counts but writes nothing; invalid records are counted, not re-sent to the DLQ | FR-REC-02, FR-OBS-02 | TS-R-04 |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -118,6 +134,7 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-R-04 | Replay a historical bronze range twice (and once overlapping live processing): Postgres unchanged after the second run | FR-REC-02 | P1 |
 | TS-R-05 | Kafka broker restart during processing: resumes without loss | FR-REC-01 | P1 |
 | TS-R-06 | Outage burst: the generator buffers 30 min of events and then floods; lag recovers; correctness holds; catch-up time recorded | NFR-03 | P1 |
+| TS-R-08 | Bronze file sink: a batch re-executed after a lost checkpoint commit writes no duplicate rows (AC-5.4) | FR-STO-01, NFR-02 | P1 |
 | TS-R-07 | Offsets aged out: the query fails with an actionable error; runbook recovery from bronze | FR-REC-04 | P2 |
 | TS-D-01 | Count reconciliation DQ-06 on a closed window | DQ-06 | P1 |
 | TS-D-02 | State reconciliation DQ-07: streaming status = batch recomputation from silver | DQ-07, KPI-P1 | P1 |

@@ -25,21 +25,22 @@ final case class Classified(
 
 object Classify {
 
-  /** Runs on executors. `now` is the batch's processing time, fixed on the driver, so every record in a
-    * micro-batch (and its re-run) is judged against the same clock.
+  /** Runs on executors. Time bounds are judged against each record's Kafka ingest timestamp (LogAppendTime,
+    * SC-0004), so a live batch, its re-run, the bronze writer and a later replay all reach the same decision.
+    * `rejectedAt` only stamps DLQ records.
     */
-  def partition(config: ValidationConfig, mode: ProcessingMode, now: Instant, processor: ProcessorInfo)(
+  def partition(config: ValidationConfig, mode: ProcessingMode, rejectedAt: Instant, processor: ProcessorInfo)(
       records: Iterator[KafkaRecord]
   ): Iterator[Classified] = {
     val validator = new EventValidator(config)
     records.map { r =>
-      validator.validate(r.value, now, mode) match {
+      validator.validate(r.value, r.timestamp.toInstant, mode) match {
         case Right(event) =>
           Classified(r.topic, r.partition, r.offset, valid = true, Some(ApplyEvent.from(event)), None, None, None)
         case Left(rejection) =>
           val key    = Option(r.key).map(k => new String(k, StandardCharsets.UTF_8))
           val source = SourceCoordinates(r.topic, r.partition, r.offset, r.timestamp.toInstant, key)
-          val json   = DlqRecord.toJson(r.value, rejection, source, processor, now)
+          val json   = DlqRecord.toJson(r.value, rejection, source, processor, rejectedAt)
           Classified(r.topic, r.partition, r.offset, valid = false, None, key, Some(json), Some(rejection.primary.name))
       }
     }

@@ -41,7 +41,8 @@ No cloud account and no paid service are needed.
 | `make up-all` | Start all profiles | *(planned)* |
 | `make generate [SCENARIO=…] [SINK=kafka\|file]` | Run the generator; outputs go to `data/generator/<scenario>/` | ✅ |
 | `make test-it-py` | Python integration tests against the running stack | ✅ |
-| `make process` | Run the status processor on the host (`local[*]`) against the core stack | ✅ |
+| `make process` | Run the status processor and the bronze writer on the host (`local[*]`) against the core stack | ✅ |
+| `make replay FROM=yyyy-mm-dd [TO=…] [MODE=as-ingested\|backfill] [DRY_RUN=true]` | Replay bronze into Postgres; recorded in `ops.replay_runs` | ✅ |
 | `make status` | Status distribution and batch totals from Postgres | ✅ |
 | `make reconcile [RUN=data/generator/x]` | Wait for the processor (bounded), then compare Postgres with a generator manifest | ✅ |
 | `make fixtures` | Regenerate the generator snapshot used by the Scala parity test (TS-C-04) | ✅ |
@@ -64,7 +65,8 @@ No cloud account and no paid service are needed.
 | `POSTGRES_JDBC_URL` | `jdbc:postgresql://localhost:55432/ptp` | ✅ |
 | `FUTURE_SKEW_TOLERANCE_SECONDS` / `LIVE_MAX_EVENT_AGE_DAYS` | `300` / `30` | ✅ |
 | `PTP_STREAM_WRITER_PASSWORD` etc. | *(no default; required)* | Secrets: set in `.env` only |
-| `LAKE_ROOT` | `/data/lake` | |
+| `LAKE_ROOT` | `data/lake` (made absolute by `make`) | ✅ |
+| `BRONZE_ENABLED` | `true` | ✅ |
 | `CHECKPOINT_ROOT` | `/data/checkpoints` | |
 | `TRIGGER_INTERVAL_SECONDS` | `5` | ✅ |
 | `MAX_OFFSETS_PER_TRIGGER` | `50000` | |

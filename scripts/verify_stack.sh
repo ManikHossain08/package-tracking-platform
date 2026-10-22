@@ -23,6 +23,14 @@ check_topic() { # name partitions retention_ms
 check_topic package-events.v1 6 604800000
 check_topic package-events.dlq.v1 3 1209600000
 
+# SC-0004: the events topic is stamped by the broker (ingest-time clock for validation).
+if kexec /opt/kafka/bin/kafka-configs.sh --bootstrap-server $BS --describe --entity-type topics \
+     --entity-name package-events.v1 | grep 'message.timestamp.type=LogAppendTime' >/dev/null; then
+  pass "SC-0004 package-events.v1 message.timestamp.type=LogAppendTime"
+else
+  fail "SC-0004 package-events.v1 is not LogAppendTime"
+fi
+
 # AC-0.3: producing to an unknown topic must fail fast and must not create it.
 probe="ptp-autocreate-probe"
 if echo "probe" | kexec /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server $BS --topic "$probe" \

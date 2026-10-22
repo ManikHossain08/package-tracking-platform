@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process status reconcile check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -82,9 +82,17 @@ test-scala: ## Scala unit tests (no Docker), including the Spark smoke test
 test-it: venv ## Scala integration tests: Testcontainers Kafka + Postgres + the real generator (AC-1.x)
 	cd processor && sbt -batch "streaming/testOnly -- -n Integration"
 
-process: env ## Run the status processor on the host against the core stack (Ctrl-C to stop)
-	set -a; . ./.env; set +a; export CHECKPOINT_ROOT="$(CURDIR)/$${CHECKPOINT_ROOT:-data/checkpoints}"; \
-	  cd processor && sbt -batch "streaming/run"
+process: env ## Run the status processor + bronze writer on the host against the core stack (Ctrl-C to stop)
+	set -a; . ./.env; set +a; export CHECKPOINT_ROOT="$(CURDIR)/$${CHECKPOINT_ROOT:-data/checkpoints}" \
+	  LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && sbt -batch "streaming/run"
+
+FROM ?= $(shell date -u +%F)
+TO ?= $(FROM)
+MODE ?= as-ingested
+DRY_RUN ?= false
+replay: env ## Replay bronze into Postgres: make replay FROM=yyyy-mm-dd [TO=…] [MODE=as-ingested|backfill] [DRY_RUN=true]
+	set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
+	  sbt -batch "streaming/runMain ptp.streaming.ReplayApp --from $(FROM) --to $(TO) --mode $(MODE) --dry-run $(DRY_RUN)"
 
 RUN ?= data/generator/smoke
 reconcile: ## Wait for the processor, then compare Postgres with a generator run: make reconcile [RUN=data/generator/x]

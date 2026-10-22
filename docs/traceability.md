@@ -2,7 +2,7 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1–4 are done; step 4 completed the first vertical slice.
+> empty until the step that implements them. Steps 1–5 are done (step 4 = first vertical slice; step 5 = bronze + replay).
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
@@ -15,19 +15,19 @@
 | FR-VAL-02 | P0 | 01 | 0005 | `EventValidator.timeBounds`; batch clock fixed on the driver (`StatusProcessor`) | TS-U-03 ✅, TS-C-04 ✅, TS-I-02 ✅ | ✅ Verified |
 | FR-VAL-03 | P0 | 01, 02 §2 | — | `Rejection.primary`, `ErrorCode.precedence` | TS-U-01 ✅, TS-U-02 ✅ | ✅ Verified |
 | FR-DLQ-01 | P0 | 01, 02 §3 | 0002 | `DlqRecord.scala`, DLQ write in `StatusProcessor` | DlqRecordSpec ✅, TS-I-02 ✅ (schema-valid, offsets), dirty-stream offset reconciliation ✅ | ✅ Verified |
-| FR-DLQ-02 | P1 | 01 | — | invalid rows never reach `PostgresStatusSink` | TS-I-02 ✅ (status empty after invalid-only input); bronze part pending | Partial |
+| FR-DLQ-02 | P1 | 01 | — | invalid rows never reach `PostgresStatusSink`; kept in bronze with `is_valid = false` | TS-I-02 ✅, TS-I-05 ✅ | ✅ Verified (silver/gold part when built) |
 | FR-STR-01 | P0 | 01, 03 | 0006 | `StatusProcessor.scala`, `ProcessorConfig.scala`, `StatusProcessorApp.scala` | TS-I-01 ✅, ProcessorConfigSpec ✅, live run on Compose ✅ | ✅ Verified |
 | FR-DED-01 | P0 | 01, 02 §4 | 0002, 0003 | `tracking.processed_events`, `PostgresStatusSink.insertProcessed` | TS-I-03 ✅, TS-U-05 ✅ (SinkPropertyIT), TS-R-01 ✅ | ✅ Verified |
 | FR-DED-02 | P1 | 01 | 0005 | — | TS-P-02 | Specified |
 | FR-DED-03 | P1 | 01 | 0003 | — | TS-I-03 | Specified |
 | FR-ORD-01 | P0 | 01 | 0004 | `StatusRule.scala`, SQL `Preferred` in `PostgresStatusSink` | TS-U-04 ✅, TS-U-05 ✅, TS-I-04 ✅, manifest equality in every IT ✅ | ✅ Verified |
 | FR-LATE-01 | P1 | 01 | 0005 | late events applied by the preference rule | dirty-stream IT ✅ (late events reconcile); watermark + `late` counter pending | Partial |
-| FR-STO-01 | P1 | 01, 02 §5 | 0006 | — | TS-I-05 | Specified |
+| FR-STO-01 | P1 | 01, 02 §5 | 0006 | `BronzeWriter.scala` (`BronzeRow`), `BestEffortFields.scala` | TS-I-05 ✅ (AC-5.1–5.3), TS-R-08 ✅ (AC-5.4), live run ✅ | ✅ Verified |
 | FR-STO-02 | P1 | 01, 02 §5 | — | — | TS-D-04 | Specified |
 | FR-ANL-01 | P1 | 01, 02 §4 | 0005 | — | TS-D-03, TS-D-04 | Specified |
 | FR-ANL-02 | P1 | 01 | — | — | TS-D-03 | Specified |
 | FR-REC-01 | P0 | 01, 06 | 0002 | checkpoint per query; idempotent sink | TS-R-01 ✅ (crash after sink commit, re-run batch 3, attempts = 2); TS-R-05 pending | ✅ Verified (TS-R-05 pending) |
-| FR-REC-02 | P1 | 01, 03 | 0006 | — | TS-R-04 | Specified |
+| FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅ | ✅ Verified |
 | FR-REC-03 | P1 | 01, 06 | 0002 | — | TS-R-02 | Specified |
 | FR-REC-04 | P2 | 01, 06 | — | — | TS-R-07 | Specified |
 | FR-OBS-01 | P1 | 01, 04 | — | — | metric contract test | Specified |
@@ -38,7 +38,7 @@
 | FR-DEV-03 | P1 | 01 | — | — | CI | Specified |
 | NFR-01 | — | 04 | 0002 | `StatusRule` + SQL mirror | TS-U-05 ✅ (Scala property + SQL property); TS-R-04 pending | ✅ Verified (replay pending) |
 | NFR-02 | — | 04 | 0002 | per-sink semantics as in ADR-0002 | TS-R-01 ✅, DLQ/status reconciliation ✅; TS-R-02..05 pending | Partial |
-| NFR-03 | — | 04 | — | — | TS-R-01, TS-R-06 | Specified |
+| NFR-03 | — | 04 | — | checkpoint restart; rebuild from bronze | TS-R-01 ✅, TS-R-04 ✅ (RPO 0 for data in bronze); TS-R-06 + RTO measurement pending | Partial |
 | NFR-04 | — | 02, 04 | — | `additionalProperties: true` in event schema | unknown-field contract test ✅; TS-C-03 planned | Partial |
 | NFR-05 | — | 04 | 0005 | — | TS-P-02 | Specified |
 | NFR-06 | — | 04, 06 | — | `.env.example`, `make env`, `.gitleaks.toml` | `make secrets-scan` ✅ | ✅ Verified |
@@ -47,4 +47,4 @@
 | NFR-09 | — | 04, 06 | — | — | TS-U-08 | Specified |
 | NFR-10 | — | 04, 09 | — | — | TS-P-01 | Specified |
 | NFR-11 | — | 04, 08 | — | — | config test | Specified |
-| DQ-01..10 | — | 05 | — | — | TS-D-01..04 | Specified |
+| DQ-01..10 | — | 05 | — | DQ-06 bronze↔DLQ agreement asserted in tests | TS-I-05 ✅ (DQ-06 part); TS-D-01..04 pending (batch DQ job) | Partial |
