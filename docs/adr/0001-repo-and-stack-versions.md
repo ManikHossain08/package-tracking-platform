@@ -36,9 +36,8 @@ from memory.
 ## Pinned versions (runtime components)
 
 Verified 2026-10-21 against Maven Central `maven-metadata.xml`, the Apache archive and
-Docker Hub tags. Image **digests** are added when `infra/docker-compose.yml` is written.
-Library pins (ScalaTest, ScalaCheck, Testcontainers, JDBC driver, Python packages) live in
-`build.sbt` and the Python lockfile, and are recorded there when created.
+Docker Hub tags. Image digests live in `infra/docker-compose.yml` and the `Makefile`.
+`make check-pins` enforces that nothing floats.
 
 | Component | Pin | Notes |
 |---|---|---|
@@ -60,3 +59,15 @@ Library pins (ScalaTest, ScalaCheck, Testcontainers, JDBC driver, Python package
 - Spark 4 is newer, so some examples online target 3.x APIs. Differences are noted where relevant.
 - Bitnami images are intentionally avoided (their free catalogue changed in 2025). Official
   images are used throughout.
+
+## Pinned versions (build and test tooling, step 1)
+
+| Component | Pin | Where |
+|---|---|---|
+| sbt | 1.12.15 | `processor/project/build.properties` |
+| ScalaTest / scalatestplus-scalacheck | 3.2.20 / 3.2.20.0 (`scalacheck-1-19`) | `processor/build.sbt` |
+| Python dev deps | pytest 9.1.1, jsonschema 4.26.0, ruff 0.16.10 (+ transitive), all with sha256 hashes, resolved with `--exclude-newer 2026-10-07` | `requirements-dev.txt` |
+| gitleaks image | `zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0…` | `Makefile` |
+| GitHub Actions | checkout v7.0.1, setup-java v6.1.0, setup-python v7.0.0, sbt/setup-sbt v1.5.12, each pinned to its commit SHA | `.github/workflows/ci.yml` |
+
+Testcontainers is pinned when the integration tests are added (step 4).

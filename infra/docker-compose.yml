@@ -1,0 +1,83 @@
+# Local stack. Profiles: core (this step), obs and orchestration (added in later steps).
+# Every image is pinned by tag AND digest (NFR-07, ADR-0001). Ports bind to 127.0.0.1 only (spec 06).
+name: ptp
+
+services:
+  kafka:
+    profiles: ["core"]
+    image: apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7
+    hostname: kafka
+    environment:
+      CLUSTER_ID: "cHRwLWxvY2FsLWNsdXN0ZXI"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      # Containers use kafka:9092; tools on the host use localhost:29092.
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # Topics are created only by kafka-init (FR-ING-02).
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Single broker: internal topics cannot be replicated. Production needs RF=3 (spec 04, NFR-03).
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "127.0.0.1:29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  kafka-init:
+    profiles: ["core"]
+    image: apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_HEAP_OPTS: "-Xmx256m"
+    volumes:
+      - ./kafka/create-topics.sh:/opt/ptp/create-topics.sh:ro
+    entrypoint: ["/bin/bash", "/opt/ptp/create-topics.sh"]
+    restart: "no"
+
+  postgres:
+    profiles: ["core"]
+    image: postgres:17.11@sha256:b8faeff7712663c2773a190181e1246e37e364b887611c04658c28b44e2408fe
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ptp}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-ptp_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD must be set in .env (run make env)}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+volumes:
+  kafka-data:
+  postgres-data:

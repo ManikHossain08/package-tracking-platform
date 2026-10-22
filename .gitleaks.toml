@@ -1,0 +1,9 @@
+# Secret scanning config (NFR-06). Extends the default rules; allowlists are kept narrow.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Kafka record key holding a synthetic package ID in contract samples (not a secret)"
+paths = ['''^contracts/samples/''']
+regexTarget = "line"
+regexes = ['''"key":\s*"PKG-[A-Z0-9]{12}"''']

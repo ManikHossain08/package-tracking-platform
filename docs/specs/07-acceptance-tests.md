@@ -21,6 +21,22 @@
 - Fault injection is triggered by test hooks or by container stop/start, never by timing races.
   Example: a `FailingJdbcSink` fails on attempt N.
 
+## Step 1 (setup) — acceptance criteria
+
+**Scope:** reproducible local foundation. It covers the Compose `core` profile with Kafka and
+Postgres only, the build skeletons, the contract tests and CI. No application logic.
+
+| AC | Criterion | Reqs | Verified by |
+|---|---|---|---|
+| AC-0.1 | `make up` starts Kafka and Postgres, and both report healthy within a bounded wait (`docker compose up --wait`, timeout 120 s) | FR-DEV-01 | `make verify` |
+| AC-0.2 | After `make up`, topics `package-events.v1` (6 partitions, retention 7 d) and `package-events.dlq.v1` (3 partitions, retention 14 d) exist with exactly these settings | FR-ING-02 | `make verify` |
+| AC-0.3 | Topic auto-creation is disabled: producing to a non-existent topic fails, and the topic is not created | FR-ING-02 | `make verify` |
+| AC-0.4 | The topic init is idempotent: running it again succeeds and changes nothing | FR-ING-02 | `make verify` |
+| AC-0.5 | `make test` runs the Scala and Python unit/contract tests without Docker. It includes TS-C-01 (contract samples) and a Spark 4.1.3 local-session smoke test. | FR-DEV-01, FR-VAL-01 | `make test` output |
+| AC-0.6 | Every Compose image is pinned by tag **and** `@sha256` digest. sbt, Scala and library versions are exact. Python dependencies are locked with hashes. | NFR-07 | `make check-pins` |
+| AC-0.7 | No secrets are committed: `.env` is git-ignored, `.env.example` has placeholders only, and gitleaks finds nothing | NFR-06 | `make secrets-scan`, CI |
+| AC-0.8 | The CI workflow runs pin checks, the secret scan, Python tests, Scala tests and the Compose verification on every push and PR | FR-DEV-02 | Workflow file. A green run requires a GitHub remote, which isn't set up yet. |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and

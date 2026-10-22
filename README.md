@@ -8,6 +8,19 @@ and malformed events, and to recover after outages.
 
 > **Status: Phase 2 complete — specifications and ADRs 0001–0006 accepted.** No application code yet. Spark line changed to 4.1.3 by approved [SC-0001](docs/spec-changes/0001-spark-version-line.md).
 
+## Quick start
+
+Prerequisites: Docker (with ~10 GB memory allocated), JDK 17, sbt, Python 3.12, make.
+
+```bash
+make up        # creates .env with a generated password, starts Kafka + Postgres, creates topics
+make verify    # checks topics, configs, disabled auto-create, init idempotency
+make test      # Python contract tests + Scala/Spark tests (no Docker needed)
+make down      # stop (volumes kept)
+```
+
+`make help` lists all targets.
+
 ## Where to start reading
 
 | Document | Purpose |
@@ -27,7 +40,7 @@ and malformed events, and to recover after outages.
 2. Specifications ✅
 3. Architecture and ADRs ✅ (0001–0006 accepted; 0007–0008 planned)
 4. Schemas and acceptance tests
-5. Incremental implementation, one vertical slice at a time
+5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅
 6. Test runs with actual results
 7. Security, reliability and performance review
 8. Documentation and portfolio demo

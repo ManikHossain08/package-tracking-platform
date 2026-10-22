@@ -1,0 +1,4 @@
+# Python dev/test dependencies. Lock with `make lock` (uv, hashes, --exclude-newer for reproducibility).
+pytest
+jsonschema[format-nongpl]
+ruff
