@@ -84,6 +84,25 @@ AC-5.2, AC-5.5 and AC-5.6 rely on **SC-0004** (approved): time bounds are judged
 | AC-5.6 | **Replay restores state:** after the tracking tables are emptied (simulated Postgres data loss), replaying bronze rebuilds `package_status` equal to the generator manifest (RPO 0 for data in bronze, NFR-03). Replaying 31 days later (simulated clock) gives the same result. | FR-REC-02, NFR-03 | TS-R-04 |
 | AC-5.7 | **Replay is observable and safe:** each run is recorded in `ops.replay_runs` (range, mode, counts, timings); `--dry-run` validates and counts but writes nothing; invalid records are counted, not re-sent to the DLQ | FR-REC-02, FR-OBS-02 | TS-R-04 |
 
+## Step 6 (silver + gold analytics) — acceptance criteria
+
+**Scope:** batch jobs `silver-build` (bronze → silver Parquet) and `gold-load` (silver → Postgres `analytics`),
+plus the SQL query pack. They rely on **SC-0005** (approved): fact tables, metric definitions C1–C8,
+and the generator's expected-gold files. Silver comparisons ignore `silver_run_id`; gold comparisons ignore `computed_at` and `run_id`.
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-6.1 | **Silver content:** for a dirty generator run, silver holds exactly the unique valid events (`count = unique_valid_events`); `event_id` is unique (DQ-02); every row is in `event_date` = UTC date of `event_time`; no invalid record is present | FR-STO-02, DQ-02 | TS-D-04 |
+| AC-6.2 | **Dedup rule:** for an `event_id` seen more than once, silver keeps the copy with the smallest `(kafka_timestamp, kafka_partition, kafka_offset)` | FR-STO-02 | TS-D-04 |
+| AC-6.3 | **Typed with lineage:** all contract fields are typed columns (shipment and details flattened), plus `content_hash` (ADR-0003 fields) and lineage (`kafka_partition`, `kafka_offset`, `kafka_timestamp`, `silver_run_id`) | FR-STO-02 | TS-D-04 |
+| AC-6.4 | **Idempotent, targeted rebuild:** building the same ingest window twice gives identical silver rows. A late event touches only its own `event_date` partition; other partitions' files are not rewritten. A build that fails after staging but before the swap leaves the live partitions unchanged, and the next build succeeds. | FR-STO-02 | TS-D-04 |
+| AC-6.5 | **Compaction:** each silver partition has at most `max(1, ⌈estimated bytes / target⌉)` files (target configurable, default 128 MiB); bronze's many small files become one file per partition locally | FR-STO-02 | TS-D-04 |
+| AC-6.6 | **Gold equals an independent oracle:** `delivery_facts`, `facility_visits` and `daily_network_activity` equal the generator's expected files (C1–C7). The daily aggregates equal those facts aggregated (counts, on-time %, exact p50/p95). | FR-ANL-01, FR-GEN-03 | TS-D-03 |
+| AC-6.7 | **Consistency (DQ-08):** Σ `delivered_count` = rows in `delivery_facts` = packages whose `package_status` is `DELIVERED` and that have a `CREATED` event, for the window | FR-ANL-01, DQ-08 | TS-D-03 |
+| AC-6.8 | **Atomic, idempotent load:** re-running the same window gives identical rows (excluding `computed_at`, `run_id`). A load failing mid-way leaves the previous gold rows intact. Every run is logged in `ops.gold_runs`. | FR-ANL-01, NFR-01 | TS-D-03 |
+| AC-6.9 | **Recompute window:** a late `DELIVERED` whose delivery date is inside the 7-day window changes gold on the next run; facts older than the window are unchanged | FR-ANL-01, FR-LATE-01 | TS-D-03 |
+| AC-6.10 | **SQL query pack:** every query in `sql/analytics/` (on-time %, delay percentiles, dwell, throughput, exception rate) runs as `ptp_reader` and returns hand-computed expected results on a small fixed fixture | FR-ANL-02 | TS-D-05 |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -138,7 +157,8 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-R-07 | Offsets aged out: the query fails with an actionable error; runbook recovery from bronze | FR-REC-04 | P2 |
 | TS-D-01 | Count reconciliation DQ-06 on a closed window | DQ-06 | P1 |
 | TS-D-02 | State reconciliation DQ-07: streaming status = batch recomputation from silver | DQ-07, KPI-P1 | P1 |
-| TS-D-03 | Gold consistency DQ-08, plus fixture-based expected results for the SQL query pack | DQ-08, FR-ANL-02 | P1 |
-| TS-D-04 | Silver uniqueness DQ-02, and an idempotent rebuild of silver/gold | DQ-02, FR-STO-02, FR-ANL-01 | P1 |
+| TS-D-03 | Gold equals the generator's independent oracle (facts and daily tables), DQ-08 consistency, idempotent/atomic load, recompute window (AC-6.6–6.9) | FR-ANL-01, DQ-08 | P1 |
+| TS-D-04 | Silver content, dedup rule, typing/lineage, idempotent targeted rebuild, crash before swap, compaction (AC-6.1–6.5) | DQ-02, FR-STO-02 | P1 |
+| TS-D-05 | SQL query pack on a hand-computed fixture, as `ptp_reader` (AC-6.10) | FR-ANL-02 | P1 |
 | TS-P-01 | Throughput/latency benchmark per spec 09 | NFR-10 | P1 |
 | TS-P-02 | 30-min soak at constant rate: heap and state rows plateau | NFR-05 | P1 |

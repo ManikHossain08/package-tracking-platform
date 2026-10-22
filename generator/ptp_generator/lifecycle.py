@@ -40,15 +40,18 @@ class Facility:
 class Network:
     facilities: tuple[Facility, ...]
     vehicle_ids: tuple[str, ...]
+    postal_prefixes: tuple[str, ...] = ()  # empty = any random prefix
 
 
-def build_network(rng: random.Random, n_facilities: int, n_vehicles: int) -> Network:
+def build_network(rng: random.Random, n_facilities: int, n_vehicles: int, n_prefixes: int = 0) -> Network:
     facilities = []
     for i in range(n_facilities):
         code, tz = _DC_LOCATIONS[i % len(_DC_LOCATIONS)]
         facilities.append(Facility(f"DC-{code}{i // len(_DC_LOCATIONS) + 1:02d}", code, tz))
     vehicles = tuple(f"VH-{n:06d}" for n in rng.sample(range(1, 1_000_000), n_vehicles))
-    return Network(tuple(facilities), vehicles)
+    # Only consume randomness for a pool when one is configured, so existing seeds keep their streams.
+    prefixes = tuple(sorted({_fsa(rng) for _ in range(n_prefixes * 4)}))[:n_prefixes] if n_prefixes else ()
+    return Network(tuple(facilities), vehicles, prefixes)
 
 
 def _ms(dt: datetime) -> datetime:
@@ -113,7 +116,9 @@ def simulate_package(
         "promised_delivery_date": promised,
         "service_level": level,
         "origin_facility_id": origin.facility_id,
-        "destination_postal_prefix": _fsa(rng),
+        "destination_postal_prefix": rng.choice(network.postal_prefixes)
+        if network.postal_prefixes
+        else _fsa(rng),
         "destination_timezone": destination.tz,
     }
     t = created_at
@@ -187,7 +192,7 @@ def assign_sequences(events: list[Event]) -> None:
 
 
 def generate_lifecycles(scenario: Scenario, rng: random.Random) -> list[list[Event]]:
-    network = build_network(rng, scenario.facilities, scenario.vehicles)
+    network = build_network(rng, scenario.facilities, scenario.vehicles, scenario.postal_prefixes)
     span = (scenario.window_end - scenario.window_start).total_seconds()
     packages = []
     for _ in range(scenario.packages):

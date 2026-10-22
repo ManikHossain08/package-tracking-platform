@@ -174,11 +174,27 @@ observability and latency measurement, **not** as the idempotency mechanism (see
 
 | Table | Grain / PK | Columns |
 |---|---|---|
+| `analytics.delivery_facts` | one row per delivered package (PK `package_id`) | `delivery_date` (destination-local), `delivered_at`, `promised_delivery_date`, `service_level`, `destination_postal_prefix`, `destination_timezone`, `delay_minutes` (signed, double), `on_time`, `computed_at`, `run_id` |
+| `analytics.facility_visits` | one row per (`package_id`, `facility_id`, `arrived_at`) | `arrival_date`, `departed_at` (nullable), `departure_date` (nullable), `dwell_minutes` (nullable), `computed_at`, `run_id` |
 | `analytics.daily_delivery_performance` | (`delivery_date`, `service_level`, `destination_postal_prefix`) | `delivered_count`, `on_time_count`, `on_time_pct`, `delay_p50_min`, `delay_p95_min`, `computed_at`, `run_id` |
 | `analytics.daily_facility_performance` | (`activity_date`, `facility_id`) | `arrivals`, `departures`, `dwell_p50_min`, `dwell_p95_min`, `exception_count`, `computed_at`, `run_id` |
+| `analytics.daily_network_activity` | (`activity_date`) | `active_packages`, `packages_with_exception`, `exception_rate`, `computed_at`, `run_id` |
 
-`delivery_date` is the date in the destination's local time zone. `activity_date` is in UTC
-(facility time zones are out of scope for the MVP).
+Metric definitions (SC-0005 C1–C8):
+- **C1** A delivery counts only if `DELIVERED` is the package's status-defining event (spec 01 rule).
+- **C2** Packages without `CREATED` are excluded from delivery facts.
+- **C3** End of day = start of `promised_delivery_date + 1` in the destination zone; on time ⇔ `delivered_at` < end of day; `delay_minutes = delivered_at − end of day`.
+- **C4** Percentiles are exact with linear interpolation over the signed delay.
+- **C5** Each arrival pairs with the departure that has the smallest ordering key greater than the arrival's, for the same package and facility. Two arrivals (e.g. a semantic duplicate) may pair with the same departure.
+- **C6** Arrivals count on their UTC date; departures and dwell on the departure's UTC date; exceptions on their UTC date.
+- **C7** Active package on day D = any valid event on D.
+- **C8** Each run recomputes the 7 days ending at `as_of` and reads silver back 30 more days. Older facts are left as loaded.
+
+Gold run log: `ops.gold_runs` (`run_id`, window, `status`, row counts, timings, `error`). Staging tables for the load live in `ops`
+(not readable by `ptp_reader`).
+
+`delivery_date` is the date in the destination's local time zone. `activity_date`, `arrival_date` and `departure_date`
+are in UTC (facility time zones are out of scope for the MVP).
 
 ## 5. Parquet lake layout
 
@@ -187,7 +203,7 @@ Root: `${LAKE_ROOT}` (local default `./data/lake`).
 | Layer | Path | Partition | Writer | Content |
 |---|---|---|---|---|
 | Bronze | `bronze/package_events/ingest_date=YYYY-MM-DD/` | `ingest_date` (UTC date of the Kafka `LogAppendTime`) | bronze-writer stream (Spark file sink) | All consumed records: `kafka_topic`, `kafka_partition`, `kafka_offset`, `kafka_timestamp` (timestamp), `kafka_key` (binary), `raw_value` (binary), `is_valid`, `error_codes[]` (primary first, then by precedence), best-effort parsed `event_id`, `package_id`, `event_type`, `event_time`, `processor_version` |
-| Silver | `silver/package_events/event_date=YYYY-MM-DD/` | `event_date` (UTC) | Airflow batch job | Valid, typed, deduplicated by `event_id` (earliest `kafka_timestamp` wins), all contract fields flattened, plus `content_hash` |
+| Silver | `silver/package_events/event_date=YYYY-MM-DD/` | `event_date` (UTC) | `silver-build` batch job (Airflow later) | Valid, typed, deduplicated by `event_id` (smallest `(kafka_timestamp, kafka_partition, kafka_offset)` wins), all contract fields flattened, plus `content_hash` (SHA-256 of the ADR-0003 fields) and lineage (`kafka_*`, `silver_run_id`). Incremental: rebuilds only the `event_date`s touched by bronze rows ingested since the last build's watermark. |
 | Gold | Postgres `analytics.*` | — | Airflow batch job | See §4 |
 
 **Why bronze is partitioned by ingest date:** invalid records may have no usable `event_time`,
@@ -200,8 +216,9 @@ Silver uses `event_date` because analytics query by event time.
 
 **Reader rule:** bronze is written by the Spark file sink. It is only consistent when read
 through Spark, which honours `_spark_metadata`. Other engines globbing the directory may
-see files from failed batches. Silver is rewritten atomically per partition by the batch
-job, so any Parquet reader can use it.
+see files from failed batches. Silver partitions are replaced by a **staging-directory swap** (SC-0005 A). A reader never sees duplicate or
+partial data, but a partition can appear empty for the instant of the swap, so readers are serialised with the
+build (silver → gold in sequence). Snapshot isolation for concurrent readers would need Delta Lake / Iceberg (P2).
 
 ## 6. Generator ground-truth manifest (FR-GEN-02/03)
 
@@ -221,3 +238,4 @@ Additional files in the same output directory (added by SC-0002 part B):
 | `delivery.jsonl` | one row per record (Kafka sink only) | `index`, `topic`, `partition`, `offset`, written after Kafka acknowledges |
 | `records.jsonl` | one row per record (file sink only) | `index`, `key`, `value` |
 | `run.json` | one per run | `run_id`, sink, record count, duration, achieved events/s (not deterministic) |
+| `expected_delivery_facts.jsonl`, `expected_facility_visits.jsonl`, `expected_network_activity.jsonl`, `expected_delivery_daily.jsonl`, `expected_facility_daily.jsonl` | gold grains | Independent Python implementation of SC-0005 C1–C7 (SC-0005 D) |

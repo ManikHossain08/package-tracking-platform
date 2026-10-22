@@ -76,3 +76,17 @@ def test_scenario_rejects_windows_the_processor_would_reject():
         make_scenario(window_end="2026-10-22T12:00:00+00:00")
     with pytest.raises(ValueError, match="outage requires rate_eps"):
         make_scenario(outage={"at_fraction": 0.5, "duration_seconds": 10})
+
+
+def test_postal_prefix_pool_limits_destinations_and_leaves_default_streams_unchanged():
+    from ptp_generator.plan import build_plan
+    from ptp_generator.render import render
+
+    from .conftest import NOW
+
+    pooled = build_plan(make_scenario(postal_prefixes=3))
+    prefixes = {e.shipment["destination_postal_prefix"] for p in pooled.packages for e in p if e.shipment}
+    assert len(prefixes) == 3
+    default_a = [render(r, NOW) for r in build_plan(make_scenario()).records]
+    default_b = [render(r, NOW) for r in build_plan(make_scenario(postal_prefixes=0)).records]
+    assert default_a == default_b

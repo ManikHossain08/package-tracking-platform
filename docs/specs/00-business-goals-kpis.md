@@ -41,10 +41,10 @@ benchmark in spec 09 has produced measurements (see NFR-10).
 
 | ID | KPI | Definition |
 |---|---|---|
-| KPI-B1 | On-time delivery rate | delivered on or before the end of the promised day ÷ delivered, per day / service level / region |
-| KPI-B2 | Delivery delay p50 / p95 | minutes from the end of the promised day to `DELIVERED.event_time`; values ≤ 0 count as on time |
-| KPI-B3 | DC dwell time p50 / p95 | `DEPARTED_FACILITY` − `ARRIVED_AT_FACILITY` for the same package and facility |
-| KPI-B4 | Exception rate | packages with ≥ 1 `EXCEPTION` ÷ packages active that day |
+| KPI-B1 | On-time delivery rate | delivered packages with `delivered_at` < end of the promised day ÷ delivered packages, per delivery day / service level / region. End of day = start of `promised_delivery_date + 1` in the destination time zone. A delivery counts only if `DELIVERED` is the package's status-defining event, and the package has a `CREATED` event (SC-0005 C1–C3). |
+| KPI-B2 | Delivery delay p50 / p95 | signed minutes `delivered_at − end of promised day` (negative = early), exact percentiles with linear interpolation (SC-0005 C3–C4) |
+| KPI-B3 | DC dwell time p50 / p95 | each `ARRIVED_AT_FACILITY` paired with the next `DEPARTED_FACILITY` of the same package and facility; dwell attributed to the UTC departure date (SC-0005 C5–C6) |
+| KPI-B4 | Exception rate | packages with ≥ 1 `EXCEPTION` on UTC day D ÷ packages with any valid event on D (SC-0005 C7) |
 
 ### Platform KPIs (quality of the platform)
 

@@ -49,7 +49,7 @@ Packages loop through facilities (ARRIVED → DEPARTED repeats per hub), so the 
 
 | ID | Pri | Requirement | Acceptance (summary) |
 |---|---|---|---|
-| FR-GEN-01 | P0 | The generator produces realistic package lifecycles: 1–4 hub hops, optional attempts and exceptions, terminal event. Seed, package count, events/sec, duration and DC/vehicle pool sizes are configurable. | Same seed + config ⇒ byte-identical event stream (excluding `emitted_at`). |
+| FR-GEN-01 | P0 | The generator produces realistic package lifecycles: 1–4 hub hops, optional attempts and exceptions, terminal event. Seed, package count, events/sec, duration, and DC/vehicle/destination-region (`postal_prefixes`) pool sizes are configurable. | Same seed + config ⇒ byte-identical event stream (excluding `emitted_at`). |
 | FR-GEN-02 | P0 | Fault injection with configurable rates: duplicate %, out-of-order %, late % (with a delay distribution), malformed % (by malformation type), and burst replay after a simulated outage. | Each injected fault is recorded in a ground-truth manifest that tests can read. |
 | FR-GEN-03 | P1 | The generator can emit a ground-truth expected final state per package, used by reconciliation tests. | Manifest matches the spec 02 format. |
 
@@ -87,8 +87,8 @@ Packages loop through facilities (ARRIVED → DEPARTED repeats per hub), so the 
 |---|---|---|---|
 | FR-STO-01 | P1 | Bronze: every consumed record (valid and invalid) is written to Parquet, partitioned by `ingest_date`, using the Spark file sink with its own checkpoint. | Bronze row count = consumed offsets for the range (read through Spark). |
 | FR-STO-02 | P1 | Silver: valid events, deduplicated by `event_id`, typed, partitioned by `event_date`, compacted to a configurable target file size (default 128 MiB). Rebuilt idempotently per partition. | Silver `event_id` uniqueness (DQ-02); rebuilding twice gives identical output. |
-| FR-ANL-01 | P1 | Gold `analytics.daily_delivery_performance` and `analytics.daily_facility_performance` are computed from silver and loaded into Postgres by replacing each date partition in a single transaction. The last 7 days are recomputed on each run. | Re-running the same window yields identical rows (excluding `computed_at` and `run_id`). |
-| FR-ANL-02 | P1 | Documented SQL query pack in `sql/analytics/` covering on-time %, delay percentiles, DC dwell, DC throughput and exception rate, with expected results on a fixed fixture. | Each query has a fixture-based test. |
+| FR-ANL-01 | P1 | Gold fact tables (`delivery_facts`, `facility_visits`) and daily aggregates (`daily_delivery_performance`, `daily_facility_performance`, `daily_network_activity`) are computed from silver and loaded into Postgres. The whole 7-day recompute window is replaced in one transaction, reading silver back 30 days for earlier `CREATED` events (SC-0005 B, C8). | Re-running the same window yields identical rows (excluding `computed_at` and `run_id`). |
+| FR-ANL-02 | P1 | Documented SQL query pack in `sql/analytics/` covering on-time %, delay percentiles, DC dwell, DC throughput and exception rate over any date range (queries read the fact tables, so percentiles are exact), with expected results on a fixed fixture. | Each query has a fixture-based test. |
 
 ### K — Replay and recovery
 

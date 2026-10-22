@@ -58,6 +58,7 @@ class Scenario:
     rate_eps: float = 0.0  # 0 = unthrottled
     facilities: int = 6
     vehicles: int = 40
+    postal_prefixes: int = 0  # destination regions; 0 = any random prefix
     p_exception: float = 0.05
     p_failed_attempt: float = 0.08
     duplicate_pct: float = 0.0
@@ -75,6 +76,8 @@ class Scenario:
             errors.append("facilities must be in 1..99")
         if not 1 <= self.vehicles <= 999_999:
             errors.append("vehicles must be in 1..999999")
+        if not 0 <= self.postal_prefixes <= 3240:
+            errors.append("postal_prefixes must be in 0..3240 (0 = unrestricted)")
         if self.window_start >= self.window_end:
             errors.append("window_start must be before window_end")
         if self.window_end > now:

@@ -48,7 +48,8 @@ object ItInfra {
   }
 
   val Passwords: Map[String, String] =
-    Map("ptp_migrator" -> "it-migrator", "ptp_stream_writer" -> "it-writer", "ptp_reader" -> "it-reader")
+    Map("ptp_migrator" -> "it-migrator", "ptp_stream_writer" -> "it-writer", "ptp_reader" -> "it-reader",
+      "ptp_batch_writer" -> "it-batch-writer")
 
   lazy val postgres: PostgreSQLContainer = {
     val p = new PostgreSQLContainer(composeImage("postgres"))
@@ -63,7 +64,7 @@ object ItInfra {
     Using.resource(DriverManager.getConnection(p.getJdbcUrl, p.getUsername, p.getPassword)) { c =>
       Passwords.foreach { case (role, pw) => c.createStatement().execute(s"CREATE ROLE $role LOGIN PASSWORD '$pw'") }
       c.createStatement().execute("GRANT CONNECT, CREATE ON DATABASE ptp TO ptp_migrator")
-      c.createStatement().execute("GRANT CONNECT ON DATABASE ptp TO ptp_stream_writer, ptp_reader")
+      c.createStatement().execute("GRANT CONNECT ON DATABASE ptp TO ptp_stream_writer, ptp_reader, ptp_batch_writer")
     }
     // Same migrations Flyway applies, in version order, as the migrator role.
     val migrations = Files.list(repoRoot.resolve("sql/postgres/migrations")).iterator().asScala.toSeq
@@ -75,9 +76,14 @@ object ItInfra {
 
   def admin(): Connection = DriverManager.getConnection(postgres.getJdbcUrl, postgres.getUsername, postgres.getPassword)
   def writer: JdbcTarget  = JdbcTarget(postgres.getJdbcUrl, "ptp_stream_writer", Passwords("ptp_stream_writer"))
+  def batchWriter: JdbcTarget = JdbcTarget(postgres.getJdbcUrl, "ptp_batch_writer", Passwords("ptp_batch_writer"))
+  def reader: JdbcTarget      = JdbcTarget(postgres.getJdbcUrl, "ptp_reader", Passwords("ptp_reader"))
 
   def reset(): Unit = Using.resource(admin()) { c =>
-    c.createStatement().execute("TRUNCATE tracking.package_status, tracking.processed_events, ops.sink_batches, ops.replay_runs")
+    c.createStatement().execute("TRUNCATE tracking.package_status, tracking.processed_events, ops.sink_batches, ops.replay_runs, " +
+      "analytics.delivery_facts, analytics.facility_visits, analytics.daily_delivery_performance, " +
+      "analytics.daily_facility_performance, analytics.daily_network_activity, ops.gold_runs, ops.gold_stage_delivery_facts, " +
+      "ops.gold_stage_facility_visits, ops.gold_stage_facility_counts, ops.gold_stage_network_activity")
   }
 
   // ---- Kafka ----------------------------------------------------------------------------------
@@ -166,6 +172,7 @@ object ItInfra {
     .master("local[4]")
     .config("spark.ui.enabled", "false")
     .config("spark.sql.shuffle.partitions", "4")
+    .config("spark.sql.session.timeZone", "UTC")
     .getOrCreate()
 
   def config(t: Topics, maxOffsetsPerTrigger: Long = 50000): ProcessorConfig = ProcessorConfig(
@@ -250,6 +257,13 @@ object ItInfra {
       r.getString(1) -> StatusRow(r.getString(2), r.getString(3), r.getObject(4, classOf[java.time.OffsetDateTime]).toInstant,
         r.getInt(5), Option(r.getString(6)))
     }.toMap
+  }
+
+  /** Rows of a query as column → value maps (admin connection). */
+  def rowsOf(sql: String): Seq[Map[String, AnyRef]] = Using.resource(admin()) { c =>
+    val rs = c.createStatement().executeQuery(sql)
+    val md = rs.getMetaData
+    Iterator.continually(rs).takeWhile(_.next()).map(r => (1 to md.getColumnCount).map(i => md.getColumnName(i) -> r.getObject(i)).toMap).toVector
   }
 
   def scalar(sql: String): Long = Using.resource(admin()) { c =>

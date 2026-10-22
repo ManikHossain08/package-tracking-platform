@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay status reconcile check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -70,7 +70,7 @@ fixtures: venv ## Regenerate the committed generator snapshot used by Scala pari
 	rm -rf $(FIXTURE_DIR)
 	PYTHONPATH=generator $(PY) -m ptp_generator --scenario bench/scenarios/fixture-validation.yaml \
 	  --sink file --out-dir $(FIXTURE_DIR)
-	rm -f $(FIXTURE_DIR)/run.json  # run.json is not deterministic
+	rm -f $(FIXTURE_DIR)/run.json $(FIXTURE_DIR)/expected_*.jsonl  # not deterministic / not needed by the parity test
 
 # Testcontainers on macOS: Docker Desktop's socket, unless DOCKER_HOST is already set.
 DOCKER_HOST ?= $(if $(wildcard $(HOME)/.docker/run/docker.sock),unix://$(HOME)/.docker/run/docker.sock,)
@@ -93,6 +93,24 @@ DRY_RUN ?= false
 replay: env ## Replay bronze into Postgres: make replay FROM=yyyy-mm-dd [TO=…] [MODE=as-ingested|backfill] [DRY_RUN=true]
 	set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
 	  sbt -batch "streaming/runMain ptp.streaming.ReplayApp --from $(FROM) --to $(TO) --mode $(MODE) --dry-run $(DRY_RUN)"
+
+LAKE_RUN = set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
+  sbt -batch "streaming/runMain ptp.lake.LakeApp
+AS_OF ?= $(shell date -u +%F)
+silver: env ## Build silver incrementally from bronze, or a range: make silver [INGEST_FROM=yyyy-mm-dd INGEST_TO=…]
+	$(LAKE_RUN) silver $(if $(INGEST_FROM),--from $(INGEST_FROM) --to $(or $(INGEST_TO),$(INGEST_FROM)),)"
+
+gold: env ## Load gold for the 7 days ending AS_OF (default today, UTC): make gold [AS_OF=yyyy-mm-dd]
+	$(LAKE_RUN) gold --as-of $(AS_OF)"
+
+lake: env ## Silver (incremental) then gold, as the lake_daily DAG will: make lake [AS_OF=…]
+	$(LAKE_RUN) all --as-of $(AS_OF)"
+
+Q ?= 01_on_time_rate
+query: ## Run a SQL query-pack file as ptp_reader: make query Q=01_on_time_rate [FROM=… TO=…]
+	@set -a; . ./.env; set +a; $(COMPOSE) exec -T -e PGPASSWORD="$$PTP_READER_PASSWORD" postgres \
+	  psql -h localhost -U ptp_reader -d "$${POSTGRES_DB:-ptp}" -P pager=off -v from_date=$(FROM) -v to_date=$(TO) -f - \
+	  < sql/analytics/$(Q).sql
 
 RUN ?= data/generator/smoke
 reconcile: ## Wait for the processor, then compare Postgres with a generator run: make reconcile [RUN=data/generator/x]

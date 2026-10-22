@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from .gold import expected_gold
 from .oracle import expected_status_event
 from .plan import Plan
 from .render import format_time
@@ -93,6 +94,9 @@ def write_manifest(plan: Plan, out_dir: Path) -> dict[str, Any]:
         f.writelines(json.dumps(row) + "\n" for row in manifest)
     with (out_dir / "malformed.jsonl").open("w") as f:
         f.writelines(json.dumps(row) + "\n" for row in malformed_rows(plan))
+    for name, rows in expected_gold(plan.events_by_package()).items():
+        with (out_dir / f"{name}.jsonl").open("w") as f:
+            f.writelines(json.dumps(row) + "\n" for row in rows)
     result = summary(plan, manifest)
     (out_dir / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

@@ -2,13 +2,13 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1–5 are done (step 4 = first vertical slice; step 5 = bronze + replay).
+> empty until the step that implements them. Steps 1–6 are done (step 4 = first vertical slice; step 5 = bronze + replay; step 6 = silver + gold).
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
 | FR-GEN-01 | P0 | 01 | — | `generator/ptp_generator/{lifecycle,config,emit}.py` | TS-U-06 ✅, TS-U-09 ✅, TS-U-12 ✅, TS-I-06 ✅ | ✅ Verified |
 | FR-GEN-02 | P0 | 01, 02 §6 | — | `generator/ptp_generator/{plan,render,emit}.py` | TS-U-10 ✅, TS-U-12 ✅, TS-C-02 ✅ | ✅ Verified |
-| FR-GEN-03 | P1 | 01, 02 §6 | 0004 (SC-0002) | `generator/ptp_generator/{oracle,manifest}.py` | TS-U-11 ✅; TS-D-02 planned | ✅ Verified |
+| FR-GEN-03 | P1 | 01, 02 §6 | 0004 (SC-0002), SC-0005 D | `generator/ptp_generator/{oracle,gold,manifest}.py` | TS-U-11 ✅, gold oracle tests ✅, TS-D-03 ✅ (gold = oracle); TS-D-02 planned | ✅ Verified |
 | FR-ING-01 | P0 | 01, 02 §1–2 | — | `generator/ptp_generator/sinks.py`; Kafka source in `StatusProcessor` | TS-C-02 ✅, TS-I-06 ✅, TS-I-01 ✅ | ✅ Verified |
 | FR-ING-02 | P1 | 01, 02 §1 | — | `infra/kafka/create-topics.sh`, `infra/docker-compose.yml` | `make verify` (AC-0.2–0.4) | ✅ Verified |
 | FR-VAL-01 | P0 | 01, 02 §2 | — | `EventValidator.scala`, `Classify.scala` | TS-C-01 ✅, TS-C-04 ✅, TS-U-01 ✅, TS-U-02 ✅, TS-U-13 ✅, TS-I-02 ✅ | ✅ Verified |
@@ -23,9 +23,9 @@
 | FR-ORD-01 | P0 | 01 | 0004 | `StatusRule.scala`, SQL `Preferred` in `PostgresStatusSink` | TS-U-04 ✅, TS-U-05 ✅, TS-I-04 ✅, manifest equality in every IT ✅ | ✅ Verified |
 | FR-LATE-01 | P1 | 01 | 0005 | late events applied by the preference rule | dirty-stream IT ✅ (late events reconcile); watermark + `late` counter pending | Partial |
 | FR-STO-01 | P1 | 01, 02 §5 | 0006 | `BronzeWriter.scala` (`BronzeRow`), `BestEffortFields.scala` | TS-I-05 ✅ (AC-5.1–5.3), TS-R-08 ✅ (AC-5.4), live run ✅ | ✅ Verified |
-| FR-STO-02 | P1 | 01, 02 §5 | — | — | TS-D-04 | Specified |
-| FR-ANL-01 | P1 | 01, 02 §4 | 0005 | — | TS-D-03, TS-D-04 | Specified |
-| FR-ANL-02 | P1 | 01 | — | — | TS-D-03 | Specified |
+| FR-STO-02 | P1 | 01, 02 §5 | SC-0005 A | `ptp/lake/SilverBuild.scala`, `core/gold/ContentHash.scala` | TS-D-04 ✅ (AC-6.1–6.5), live run ✅ | ✅ Verified |
+| FR-ANL-01 | P1 | 01, 02 §4 | 0005, SC-0005 B/C | `ptp/lake/GoldLoad.scala`, `core/gold/GoldRules.scala`, migration V5 | TS-D-03 ✅ (AC-6.6–6.9), GoldRulesSpec ✅, live run ✅ | ✅ Verified |
+| FR-ANL-02 | P1 | 01 | SC-0005 B | `sql/analytics/01–05*.sql`, `make query` | TS-D-05 ✅ (AC-6.10, as `ptp_reader`) | ✅ Verified |
 | FR-REC-01 | P0 | 01, 06 | 0002 | checkpoint per query; idempotent sink | TS-R-01 ✅ (crash after sink commit, re-run batch 3, attempts = 2); TS-R-05 pending | ✅ Verified (TS-R-05 pending) |
 | FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅ | ✅ Verified |
 | FR-REC-03 | P1 | 01, 06 | 0002 | — | TS-R-02 | Specified |
@@ -47,4 +47,4 @@
 | NFR-09 | — | 04, 06 | — | — | TS-U-08 | Specified |
 | NFR-10 | — | 04, 09 | — | — | TS-P-01 | Specified |
 | NFR-11 | — | 04, 08 | — | — | config test | Specified |
-| DQ-01..10 | — | 05 | — | DQ-06 bronze↔DLQ agreement asserted in tests | TS-I-05 ✅ (DQ-06 part); TS-D-01..04 pending (batch DQ job) | Partial |
+| DQ-01..10 | — | 05 | — | DQ-02, DQ-06, DQ-08 asserted in tests | TS-I-05 ✅ (DQ-06), TS-D-04 ✅ (DQ-02), TS-D-03 ✅ (DQ-08); scheduled DQ job (`ops.dq_results`) pending | Partial |

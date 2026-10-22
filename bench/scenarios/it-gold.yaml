@@ -1,0 +1,17 @@
+# Integration test AC-6.6: few destination regions and facilities, so each gold group holds many
+# deliveries/visits and percentiles discriminate (p90 ≠ p95). All fault types included.
+name: it-gold
+seed: 61
+packages: 500
+window_end: now
+window_hours: 96
+rate_eps: 0
+facilities: 4
+postal_prefixes: 3
+duplicate_pct: 3
+semantic_duplicate_pct: 2
+out_of_order_pct: 8
+late:
+  pct: 3
+malformed:
+  pct: 2
