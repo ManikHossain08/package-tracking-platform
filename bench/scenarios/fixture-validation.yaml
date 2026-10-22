@@ -1,0 +1,15 @@
+# Snapshot fixture for Scala/Python validation parity (TS-C-04, AC-3.2).
+# High malformed rate so every malformed type appears. Regenerate with `make fixtures`.
+name: fixture-validation
+seed: 3
+packages: 60
+window_end: now
+window_hours: 72
+rate_eps: 0
+duplicate_pct: 3
+semantic_duplicate_pct: 2
+out_of_order_pct: 10
+late:
+  pct: 5
+malformed:
+  pct: 30

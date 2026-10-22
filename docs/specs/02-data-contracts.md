@@ -71,6 +71,21 @@ Precedence (the first one listed is the primary `error_code`):
 Codes 1–12 are structural and also expressible in JSON Schema. Codes 13–14 depend on
 processing time and exist only in the processor's validation code.
 
+**Validation details** (clarifications made while implementing step 3; none changes a code above):
+
+- A Kafka tombstone (null value) is rejected as `INVALID_JSON`.
+- Duplicate JSON keys and trailing content after the object are rejected as `INVALID_JSON`,
+  so a record has exactly one meaning.
+- A required field present with JSON `null` is `INVALID_FIELD_TYPE` (as in JSON Schema). An absent field is `MISSING_REQUIRED_FIELD`.
+- A field required only because of `event_type` (e.g. `facility_id` on `ARRIVED_AT_FACILITY`,
+  or the `shipment` sub-fields on `CREATED`) that is absent or `null` is `MISSING_CONDITIONAL_FIELD`.
+- A `schema_version` with a different major (e.g. `2.0`) is rejected with
+  `UNSUPPORTED_SCHEMA_VERSION` **only**. Other fields are not checked against v1 rules, which avoids noise.
+- Semantic checks the JSON Schema cannot express are `INVALID_FORMAT`: an impossible
+  calendar date in `promised_delivery_date`, and a `destination_timezone` that is not a
+  known IANA zone. An impossible date-time in `event_time`/`emitted_at` (e.g. month 13) is `INVALID_TIMESTAMP`.
+- Time bounds are inclusive: `event_time = now + 5 min` and (live) `now − 30 d` are accepted.
+
 ## 3. DLQ record v1 — `contracts/dlq-record.v1.schema.json`
 
 | Field | Description |

@@ -1,6 +1,7 @@
 // Versions pinned per ADR-0001 (verified against Maven Central 2026-10-21).
 val sparkVersion          = "4.1.3"
 val postgresJdbcVersion   = "42.7.14"
+val jacksonVersion        = "2.21.2"   // must equal Spark 4.1.3's fasterxml.jackson.version (AC-3.7)
 val scalatestVersion      = "3.2.20"
 val scalatestPlusVersion  = "3.2.20.0" // scalatestplus scalacheck-1-19
 
@@ -36,11 +37,19 @@ val testDeps = Seq(
   "org.scalatestplus" %% "scalacheck-1-19" % scalatestPlusVersion % Test
 )
 
+// Repository root, so tests can read contracts/ and generator fixtures in place.
+val repoRoot = settingKey[File]("Repository root")
+ThisBuild / repoRoot := (ThisBuild / baseDirectory).value.getParentFile
+
 // Pure domain logic: validation, ordering, status rules. No Spark/Kafka/JDBC (spec 03).
 lazy val core = (project in file("core"))
   .settings(
     name := "ptp-processor-core",
-    libraryDependencies ++= testDeps
+    libraryDependencies ++= Seq(
+      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion
+    ) ++ testDeps,
+    Test / fork := true,
+    Test / javaOptions += s"-Dptp.repoRoot=${(ThisBuild / repoRoot).value.getAbsolutePath}"
   )
 
 // Spark Structured Streaming jobs. Spark is Provided: the apache/spark runtime image supplies it.

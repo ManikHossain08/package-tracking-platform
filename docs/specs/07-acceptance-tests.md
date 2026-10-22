@@ -53,6 +53,21 @@ follows the spec 01 status rule (as amended by SC-0002).
 | AC-2.7 | Pacing: at `rate_eps = R`, the send schedule offsets are `i / R`. During a configured outage, records are held and released together at the outage end. `rate_eps = 0` sends unthrottled. | FR-GEN-01, FR-GEN-02 | TS-U-12 |
 | AC-2.8 | The Kafka sink publishes every record to `package-events.v1`, keyed by `package_id`, with `enable.idempotence=true` and `acks=all`. Topic end offsets grow by exactly the emitted count; `delivery.jsonl` has one row per record. | FR-ING-01 | TS-I-06 (needs `make up`) |
 
+## Step 3 (validation in `processor-core`) — acceptance criteria
+
+**Scope:** pure Scala validation of one Kafka record value into either a typed event or a
+rejection with error codes. No Spark, Kafka or JDBC. Rules: spec 02 §2.
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-3.1 | Every `contracts/samples/valid/*` is accepted. Every `contracts/samples/invalid/*` is rejected with exactly the primary `error_code` in `expected.json`. | FR-VAL-01 | TS-C-01 (Scala) |
+| AC-3.2 | Cross-language parity on a generator snapshot: every valid generated record is accepted, and every malformed one is rejected with the manifest's `expected_error_code` (all 10 malformed types present) | FR-VAL-01, FR-VAL-02, FR-GEN-02 | TS-C-04 |
+| AC-3.3 | Every rule in spec 02 §2 has at least one accepting and one rejecting unit test. A record with 3 independent violations yields 3 errors, each with a JSON-pointer `field`, and the primary code follows the precedence list. | FR-VAL-01, FR-VAL-03 | TS-U-01 |
+| AC-3.4 | Time bounds: `event_time = now + 5 min` is accepted and `+5 min +1 s` is rejected (`EVENT_TIME_IN_FUTURE`). In live mode, `now − 30 d` is accepted and `−30 d −1 s` is rejected (`EVENT_TIME_TOO_OLD`). Replay mode accepts `now − 31 d`. | FR-VAL-02 | TS-U-03 |
+| AC-3.5 | Totality: for 10 000+ random inputs (random bytes, truncated JSON, field-level mutations of valid events), `validate` never throws. Every rejection has ≥ 1 error, and its primary code is the highest-precedence one. | FR-VAL-01, FR-VAL-03 | TS-U-02 |
+| AC-3.6 | Accepted events are faithfully typed: `event_time` with any offset is normalised to the same UTC instant; microsecond precision is kept; optional and conditional fields map to `Option`s | FR-VAL-01 | TS-U-13 |
+| AC-3.7 | `processor-core` has no Spark, Kafka or JDBC on its classpath (spec 03). Its JSON library version equals Spark 4.1.3's (Jackson 2.21.2) to avoid runtime conflicts. | spec 03, NFR-07 | TS-U-14 |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -85,8 +100,11 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-U-10 | Generator fault injection is real and exactly counted (AC-2.5) | FR-GEN-02 | P0 |
 | TS-U-11 | Ground-truth oracle: SC-0002 rule, permutation invariance (AC-2.6) | FR-GEN-03 | P0 |
 | TS-U-12 | Pacing and outage schedule; Kafka sink failure handling (AC-2.7) | FR-GEN-01/02, FR-ING-01 | P0 |
+| TS-U-13 | Validated events are typed faithfully: UTC normalisation, precision, Options (AC-3.6) | FR-VAL-01 | P0 |
+| TS-U-14 | `processor-core` isolation and Jackson version alignment (AC-3.7) | FR-DEV-01, NFR-07 | P0 |
 | TS-C-01 | All valid samples pass and all invalid samples fail the JSON Schema with the expected codes | FR-VAL-01 | P0 |
 | TS-C-02 | 10 000 generated valid events pass the schema | FR-ING-01 | P0 |
+| TS-C-04 | Scala validator vs Python generator labels on a committed snapshot (AC-3.2) | FR-VAL-01, FR-VAL-02 | P0 |
 | TS-C-03 | Schema evolution: a v1.1 event with an extra optional field is accepted and preserved in bronze; a `2.0` event goes to the DLQ as `UNSUPPORTED_SCHEMA_VERSION`; a new enum value is rejected until the consumer is upgraded | NFR-04 | P1 |
 | TS-I-01 | Happy path end to end (AC-1.1) | FR-ING-01, FR-STR-01 | P0 |
 | TS-I-02 | Invalid input → DLQ (AC-1.4) | FR-DLQ-01 | P0 |

@@ -2,7 +2,7 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1 (setup) and 2 (generator) are done.
+> empty until the step that implements them. Steps 1 (setup), 2 (generator) and 3 (validation) are done.
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
@@ -11,10 +11,10 @@
 | FR-GEN-03 | P1 | 01, 02 §6 | 0004 (SC-0002) | `generator/ptp_generator/{oracle,manifest}.py` | TS-U-11 ✅; TS-D-02 planned | ✅ Verified |
 | FR-ING-01 | P0 | 01, 02 §1–2 | — | `generator/ptp_generator/sinks.py` (KafkaSink) | TS-C-02 ✅, TS-I-06 ✅, sink failure test ✅; TS-I-01 planned | Partial (producer side done) |
 | FR-ING-02 | P1 | 01, 02 §1 | — | `infra/kafka/create-topics.sh`, `infra/docker-compose.yml` | `make verify` (AC-0.2–0.4) | ✅ Verified |
-| FR-VAL-01 | P0 | 01, 02 §2 | — | `contracts/*.schema.json` (processor validation: step 3) | TS-C-01 ✅ `tests/contract/`; TS-U-01, TS-U-02, TS-I-02 planned | Partial |
-| FR-VAL-02 | P0 | 01 | 0005 | — | TS-U-03, TS-I-02 | Specified |
-| FR-VAL-03 | P0 | 01, 02 §2 | — | — | TS-U-01 | Specified |
-| FR-DLQ-01 | P0 | 01, 02 §3 | 0002 | `contracts/dlq-record.v1.schema.json` | DLQ sample contract tests ✅; TS-I-02 planned | Partial |
+| FR-VAL-01 | P0 | 01, 02 §2 | — | `contracts/*.schema.json`, `processor/core/.../validation/EventValidator.scala` | TS-C-01 ✅ (Python + Scala), TS-C-04 ✅, TS-U-01 ✅, TS-U-02 ✅, TS-U-13 ✅; TS-I-02 planned (step 4) | ✅ Verified (unit level) |
+| FR-VAL-02 | P0 | 01 | 0005 | `EventValidator.timeBounds`, `ValidationConfig`, `ProcessingMode` | TS-U-03 ✅, TS-C-04 ✅; TS-I-02 planned | ✅ Verified (unit level) |
+| FR-VAL-03 | P0 | 01, 02 §2 | — | `Rejection.primary`, `ErrorCode.precedence` | TS-U-01 ✅, TS-U-02 ✅ | ✅ Verified |
+| FR-DLQ-01 | P0 | 01, 02 §3 | 0002 | `contracts/dlq-record.v1.schema.json`; error codes in `ErrorCode.scala` | DLQ sample contract tests ✅, code-set equality with DLQ schema ✅; DLQ writer + TS-I-02 in step 4 | Partial |
 | FR-DLQ-02 | P1 | 01 | — | — | TS-I-02 | Specified |
 | FR-STR-01 | P0 | 01, 03 | 0006 | — | TS-I-01 | Specified |
 | FR-DED-01 | P0 | 01, 02 §4 | 0002, 0003 | — | TS-I-03, TS-U-05 | Specified |

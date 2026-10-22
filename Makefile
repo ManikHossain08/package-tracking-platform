@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it-py generate check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it-py generate fixtures check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -64,6 +64,13 @@ SINK ?= kafka
 OUT ?= data/generator/$(basename $(notdir $(SCENARIO)))
 generate: venv ## Run the generator: make generate [SCENARIO=bench/scenarios/x.yaml] [SINK=kafka|file]
 	PYTHONPATH=generator $(PY) -m ptp_generator --scenario $(SCENARIO) --sink $(SINK) --out-dir $(OUT)
+
+FIXTURE_DIR := processor/core/src/test/resources/fixtures/generator
+fixtures: venv ## Regenerate the committed generator snapshot used by Scala parity tests (TS-C-04)
+	rm -rf $(FIXTURE_DIR)
+	PYTHONPATH=generator $(PY) -m ptp_generator --scenario bench/scenarios/fixture-validation.yaml \
+	  --sink file --out-dir $(FIXTURE_DIR)
+	rm -f $(FIXTURE_DIR)/run.json  # run.json is not deterministic
 
 test-scala: ## Scala unit tests, including the Spark smoke test
 	cd processor && sbt -batch test

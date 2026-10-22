@@ -65,6 +65,7 @@ Docker Hub tags. Image digests live in `infra/docker-compose.yml` and the `Makef
 | Component | Pin | Where |
 |---|---|---|
 | sbt | 1.12.15 | `processor/project/build.properties` |
+| Jackson (`jackson-databind`, processor-core) | 2.21.2, equal to Spark 4.1.3's `fasterxml.jackson.version`, so the Spark runtime and core agree (asserted by TS-U-14) | `processor/build.sbt` |
 | ScalaTest / scalatestplus-scalacheck | 3.2.20 / 3.2.20.0 (`scalacheck-1-19`) | `processor/build.sbt` |
 | Python dev deps | pytest 9.1.1, jsonschema 4.26.0, ruff 0.16.10 (+ transitive), all with sha256 hashes, resolved with `--exclude-newer 2026-10-07` | `requirements-dev.txt` |
 | gitleaks image | `zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0…` | `Makefile` |

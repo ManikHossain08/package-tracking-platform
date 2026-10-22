@@ -1,0 +1,37 @@
+{
+  "scenario": "fixture-validation",
+  "seed": 3,
+  "window_start": "2026-10-19T02:28:02.061Z",
+  "window_end": "2026-10-22T02:28:02.061Z",
+  "packages": 60,
+  "records_total": 513,
+  "valid_records": 395,
+  "unique_valid_events": 380,
+  "duplicate_copies": 15,
+  "semantic_duplicates": 7,
+  "out_of_order": 37,
+  "late": 18,
+  "malformed_total": 118,
+  "malformed_by_error_code": {
+    "EVENT_TIME_IN_FUTURE": 15,
+    "EVENT_TIME_TOO_OLD": 7,
+    "INVALID_FORMAT": 10,
+    "INVALID_JSON": 13,
+    "MISSING_CONDITIONAL_FIELD": 14,
+    "MISSING_REQUIRED_FIELD": 10,
+    "NOT_JSON_OBJECT": 12,
+    "TIMESTAMP_MISSING_OFFSET": 15,
+    "UNKNOWN_EVENT_TYPE": 13,
+    "UNSUPPORTED_SCHEMA_VERSION": 9
+  },
+  "expected_status_counts": {
+    "ARRIVED_AT_FACILITY": 5,
+    "CREATED": 4,
+    "DELIVERED": 31,
+    "DELIVERY_ATTEMPTED": 1,
+    "DEPARTED_FACILITY": 10,
+    "EXCEPTION": 1,
+    "OUT_FOR_DELIVERY": 5,
+    "PICKED_UP": 3
+  }
+}

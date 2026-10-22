@@ -41,6 +41,7 @@ No cloud account and no paid service are needed.
 | `make up-all` | Start all profiles | *(planned)* |
 | `make generate [SCENARIO=…] [SINK=kafka\|file]` | Run the generator; outputs go to `data/generator/<scenario>/` | ✅ |
 | `make test-it-py` | Python integration tests against the running stack | ✅ |
+| `make fixtures` | Regenerate the generator snapshot used by the Scala parity test (TS-C-04) | ✅ |
 | `make test-it` | Integration, recovery and DQ tests (Testcontainers) | *(planned, step 4)* |
 | `make bench SCENARIO=…` | Benchmark per spec 09 | *(planned)* |
 | `make trace` | Regenerate `docs/traceability.md` | *(planned, FR-DEV-03)* |

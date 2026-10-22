@@ -41,7 +41,7 @@ make down      # stop (volumes kept)
 2. Specifications ✅
 3. Architecture and ADRs ✅ (0001–0006 accepted; 0007–0008 planned)
 4. Schemas and acceptance tests
-5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅
+5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅, step 3 (validation) ✅
 6. Test runs with actual results
 7. Security, reliability and performance review
 8. Documentation and portfolio demo
