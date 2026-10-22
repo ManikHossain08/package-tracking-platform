@@ -1,0 +1,8 @@
+# Integration test AC-1.2: exact duplicates only (same event_id), no other faults.
+name: it-duplicates
+seed: 21
+packages: 120
+window_end: now
+window_hours: 72
+rate_eps: 0
+duplicate_pct: 8

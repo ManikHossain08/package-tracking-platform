@@ -1,0 +1,14 @@
+# Integration test AC-1.5: >= 5 000 records with every fault type, processed in small batches.
+name: it-restart
+seed: 31
+packages: 800
+window_end: now
+window_hours: 96
+rate_eps: 0
+duplicate_pct: 4
+semantic_duplicate_pct: 1
+out_of_order_pct: 8
+late:
+  pct: 3
+malformed:
+  pct: 2

@@ -6,3 +6,6 @@ import org.scalatest.Tag
 object Req {
   def apply(id: String): Tag = Tag(id)
 }
+
+/** Marks tests that need Docker (Testcontainers). Excluded from `make test`, run by `make test-it`. */
+object Integration extends Tag("Integration")

@@ -16,7 +16,11 @@ Prerequisites: Docker (with ~10 GB memory allocated), JDK 17, sbt, Python 3.12, 
 make up        # creates .env with a generated password, starts Kafka + Postgres, creates topics
 make verify    # checks topics, configs, disabled auto-create, init idempotency
 make test      # Python contract tests + Scala/Spark tests (no Docker needed)
+make process   # run the Spark status processor (separate terminal; Ctrl-C to stop)
 make generate  # publish the smoke scenario to Kafka; manifest in data/generator/smoke/
+make reconcile # compare Postgres with the generator's manifest
+make status    # status distribution and batch totals
+make test-it   # integration tests (Docker): Kafka + Postgres + Spark + generator
 make down      # stop (volumes kept)
 ```
 
@@ -41,7 +45,7 @@ make down      # stop (volumes kept)
 2. Specifications ✅
 3. Architecture and ADRs ✅ (0001–0006 accepted; 0007–0008 planned)
 4. Schemas and acceptance tests
-5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅, step 3 (validation) ✅
+5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅, step 3 (validation) ✅, step 4 (status pipeline, first slice) ✅
 6. Test runs with actual results
 7. Security, reliability and performance review
 8. Documentation and portfolio demo

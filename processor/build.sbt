@@ -4,6 +4,8 @@ val postgresJdbcVersion   = "42.7.14"
 val jacksonVersion        = "2.21.2"   // must equal Spark 4.1.3's fasterxml.jackson.version (AC-3.7)
 val scalatestVersion      = "3.2.20"
 val scalatestPlusVersion  = "3.2.20.0" // scalatestplus scalacheck-1-19
+val jsonSchemaValidatorVersion = "1.5.9" // test only: validates DLQ output against contracts/
+val testcontainersVersion = "2.0.5"
 
 ThisBuild / organization := "ptp"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
@@ -46,7 +48,8 @@ lazy val core = (project in file("core"))
   .settings(
     name := "ptp-processor-core",
     libraryDependencies ++= Seq(
-      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion
+      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
+      "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion % Test
     ) ++ testDeps,
     Test / fork := true,
     Test / javaOptions += s"-Dptp.repoRoot=${(ThisBuild / repoRoot).value.getAbsolutePath}"
@@ -60,11 +63,21 @@ lazy val streaming = (project in file("streaming"))
     libraryDependencies ++= Seq(
       "org.apache.spark" %% "spark-sql"            % sparkVersion % Provided,
       "org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion % Provided,
-      "org.postgresql"    % "postgresql"           % postgresJdbcVersion
+      "org.postgresql"    % "postgresql"           % postgresJdbcVersion,
+      "org.testcontainers" % "testcontainers-kafka"      % testcontainersVersion % Test,
+      "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test
     ) ++ testDeps,
     Test / fork := true,
-    Test / javaOptions ++= sparkJava17Options ++ Seq("-Xmx2g"),
-    Test / parallelExecution := false
+    Test / javaOptions ++= sparkJava17Options ++ Seq("-Xmx2g", s"-Dptp.repoRoot=${(ThisBuild / repoRoot).value.getAbsolutePath}"),
+    Test / parallelExecution := false,
+    Test / envVars ++= sys.env.get("DOCKER_HOST").map("DOCKER_HOST" -> _).toMap,
+    // `make process`: run with Spark (Provided) on the classpath, forked with the Java 17 flags.
+    Compile / run := Defaults.runTask(Compile / fullClasspath, Compile / run / mainClass, Compile / run / runner).evaluated,
+    Compile / run / mainClass := Some("ptp.streaming.StatusProcessorApp"),
+    run / fork := true,
+    run / javaOptions ++= sparkJava17Options ++ Seq("-Xmx2g"),
+    run / connectInput := false,
+    run / outputStrategy := Some(StdoutOutput)
   )
 
 lazy val root = (project in file("."))

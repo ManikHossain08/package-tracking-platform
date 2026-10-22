@@ -9,19 +9,19 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it-py generate fixtures check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
-env: ## Create .env from .env.example with a generated Postgres password (never overwrites)
-	@if [ -f .env ]; then echo ".env already exists; leaving it unchanged"; else \
-	  sed "s/^POSTGRES_ADMIN_PASSWORD=.*/POSTGRES_ADMIN_PASSWORD=$$(openssl rand -hex 24)/" .env.example > .env; \
-	  chmod 600 .env; echo "created .env"; fi
+env: ## Create .env, or add keys it is missing; *_PASSWORD values are generated (never overwrites)
+	@scripts/ensure_env.sh
 
-up: env ## Start the core stack and wait until healthy (AC-0.1)
+up: env ## Start the core stack, create topics, roles and schema (AC-0.1)
 	$(COMPOSE) --profile core up -d --wait --wait-timeout 120 kafka postgres
 	$(COMPOSE) --profile core run --rm kafka-init
+	set -a; . ./.env; set +a; COMPOSE="$(COMPOSE)" infra/postgres/bootstrap-roles.sh
+	$(COMPOSE) --profile core run --rm pg-migrate
 
 down: ## Stop the stack, keep volumes
 	$(COMPOSE) --profile core down
@@ -72,8 +72,29 @@ fixtures: venv ## Regenerate the committed generator snapshot used by Scala pari
 	  --sink file --out-dir $(FIXTURE_DIR)
 	rm -f $(FIXTURE_DIR)/run.json  # run.json is not deterministic
 
-test-scala: ## Scala unit tests, including the Spark smoke test
-	cd processor && sbt -batch test
+# Testcontainers on macOS: Docker Desktop's socket, unless DOCKER_HOST is already set.
+DOCKER_HOST ?= $(if $(wildcard $(HOME)/.docker/run/docker.sock),unix://$(HOME)/.docker/run/docker.sock,)
+export DOCKER_HOST
+
+test-scala: ## Scala unit tests (no Docker), including the Spark smoke test
+	cd processor && sbt -batch "testOnly -- -l Integration"
+
+test-it: venv ## Scala integration tests: Testcontainers Kafka + Postgres + the real generator (AC-1.x)
+	cd processor && sbt -batch "streaming/testOnly -- -n Integration"
+
+process: env ## Run the status processor on the host against the core stack (Ctrl-C to stop)
+	set -a; . ./.env; set +a; export CHECKPOINT_ROOT="$(CURDIR)/$${CHECKPOINT_ROOT:-data/checkpoints}"; \
+	  cd processor && sbt -batch "streaming/run"
+
+RUN ?= data/generator/smoke
+reconcile: ## Wait for the processor, then compare Postgres with a generator run: make reconcile [RUN=data/generator/x]
+	python3 scripts/reconcile.py $(RUN)
+
+status: ## Summarise package status, DLQ and batch counts from the running stack
+	@$(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -P pager=off -c "\
+	  SELECT current_status, count(*) AS packages FROM tracking.package_status GROUP BY 1 ORDER BY 2 DESC;" -c "\
+	  SELECT count(*) AS batches, sum(input_rows) AS input, sum(applied_rows) AS applied, sum(duplicate_rows) AS duplicates, \
+	         sum(rejected_rows) AS rejected, max(committed_at) AS last_commit FROM ops.sink_batches;"'
 
 test: test-py test-scala ## All tests that need no Docker (AC-0.5)
 

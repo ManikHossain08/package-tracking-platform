@@ -143,6 +143,9 @@ the retention window (default 30 days, which must be longer than the Kafka reten
 7 days) are dropped. A duplicate arriving after that cannot change status (the ordering
 guard rejects it) but could inflate `event_count`. That residual risk is accepted and documented.
 
+Daily partitions are created on demand through `tracking.ensure_processed_events_partition(date)`.
+It is a `SECURITY DEFINER` function owned by the migrator, so the stream writer needs no DDL rights.
+
 ### `tracking.status_anomalies` — grain: one row per (`event_id`, `anomaly_code`)
 
 Codes: `POST_TERMINAL_EVENT`, `ORPHAN_EVENT` (no `CREATED` after 24 h, written by the DQ job),
@@ -152,6 +155,7 @@ Codes: `POST_TERMINAL_EVENT`, `ORPHAN_EVENT` (no `CREATED` after 24 h, written b
 
 `started_at`, `committed_at`, `input_rows`, `applied_rows`, `duplicate_rows`, `rejected_rows`,
 `late_rows`, `min_offset`/`max_offset` (JSON per partition), `processor_version`, `run_id`.
+Also has `valid_rows` and `attempts` (incremented when Spark re-runs the same micro-batch).
 Written by the driver **after** all partition writes for the batch succeed. It is used for
 observability and latency measurement, **not** as the idempotency mechanism (see ADR-0002).
 

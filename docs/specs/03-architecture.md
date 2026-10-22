@@ -46,8 +46,8 @@
 3. `valid` → `dropDuplicatesWithinWatermark(event_id)` with watermark `event_time − 2h`
    (bounds state and removes most duplicates cheaply).
 4. Repartition `valid` by `package_id`, then for each Spark partition in **one JDBC transaction**:
-   1. `COPY`/batch-insert into a temp staging table.
-   2. `INSERT INTO tracking.processed_events … ON CONFLICT DO NOTHING RETURNING event_id`.
+   1. *(Implemented without a staging table: arrays of IDs/dates/packages are passed to `unnest(...)`.)*
+   2. `INSERT INTO tracking.processed_events … SELECT … FROM unnest(…) ON CONFLICT DO NOTHING RETURNING event_id`.
       This gives the set of events **new** to the platform.
    3. For the new events only, aggregate per `package_id`: the most preferred event (spec 01
       status rule), the count, `CREATED` shipment attributes, and the max `event_time`.

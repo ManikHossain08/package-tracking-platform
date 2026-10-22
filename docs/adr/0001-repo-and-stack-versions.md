@@ -71,4 +71,6 @@ Docker Hub tags. Image digests live in `infra/docker-compose.yml` and the `Makef
 | gitleaks image | `zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0…` | `Makefile` |
 | GitHub Actions | checkout v7.0.1, setup-java v6.1.0, setup-python v7.0.0, sbt/setup-sbt v1.5.12, each pinned to its commit SHA | `.github/workflows/ci.yml` |
 
-Testcontainers is pinned when the integration tests are added (step 4).
+| Flyway image | `flyway/flyway:13.10.3@sha256:ad074bef…` (13.11.1 was one day old; the previous release was chosen) | `infra/docker-compose.yml` |
+| Testcontainers | `testcontainers-kafka` / `testcontainers-postgresql` 2.0.5; test images read from `infra/docker-compose.yml` (same digests) | `processor/build.sbt` |
+| json-schema-validator (test) | `com.networknt:json-schema-validator` 1.5.9 | `processor/build.sbt` |
