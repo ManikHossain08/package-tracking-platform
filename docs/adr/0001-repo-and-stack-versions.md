@@ -74,3 +74,8 @@ Docker Hub tags. Image digests live in `infra/docker-compose.yml` and the `Makef
 | Flyway image | `flyway/flyway:13.10.3@sha256:ad074bef…` (13.11.1 was one day old; the previous release was chosen) | `infra/docker-compose.yml` |
 | Testcontainers | `testcontainers-kafka` / `testcontainers-postgresql` 2.0.5; test images read from `infra/docker-compose.yml` (same digests) | `processor/build.sbt` |
 | json-schema-validator (test) | `com.networknt:json-schema-validator` 1.5.9 | `processor/build.sbt` |
+| Prometheus Java client | `io.prometheus:prometheus-metrics-{core,exporter-httpserver,exporter-pushgateway}` 1.9.0 (1.10.0 was six days old) | `processor/build.sbt` |
+| Pushgateway image | `prom/pushgateway:v1.11.4@sha256:91a56b89…` (v1.11.5 was one day old) | `infra/docker-compose.yml` |
+| Prometheus / Grafana images | `prom/prometheus:v3.15.1@sha256:fa330227…`, `grafana/grafana:13.2.4@sha256:dbbc38ea…` | `infra/docker-compose.yml`, `Makefile` |
+| Airflow / socket proxy images | `apache/airflow:3.3.2-python3.12@sha256:9df9c8be…` (Docker provider 4.5.9 included), `tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b5…` | `infra/docker-compose.yml` |
+| sbt-assembly | 2.3.1 | `processor/project/plugins.sbt` |

@@ -53,6 +53,7 @@ def spark_job(task_id: str, command: list[str], writer: str = "batch", **kwargs:
             "POSTGRES_JDBC_URL": f"jdbc:postgresql://postgres:5432/{os.environ.get('POSTGRES_DB', 'ptp')}",
             "LAKE_ROOT": f"{HOST_DATA_DIR}/lake",
             "DRIVER_MEMORY": "1536m",
+            "PUSHGATEWAY_URL": "http://pushgateway:9091",  # batch metrics (SC-0007 B); best effort
             "BRONZE_RETENTION_DAYS": os.environ.get("BRONZE_RETENTION_DAYS", "90"),
             "SILVER_RETENTION_DAYS": os.environ.get("SILVER_RETENTION_DAYS", "400"),
             "PROCESSED_EVENTS_RETENTION_DAYS": os.environ.get("PROCESSED_EVENTS_RETENTION_DAYS", "30"),

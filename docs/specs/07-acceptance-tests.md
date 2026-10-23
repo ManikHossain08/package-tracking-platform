@@ -122,6 +122,23 @@ and the generator's expected-gold files. Silver comparisons ignore `silver_run_i
 | AC-7.10 | **Replay via Airflow:** a `replay_from_bronze` run with params writes an `ops.replay_runs` row; invalid params fail before any Spark job starts | FR-REC-02 | TS-O-02 |
 | AC-7.11 | **Retention (NFR-08):** `maintenance` drops `processed_events` partitions older than 30 days (through a SECURITY DEFINER function) and bronze `ingest_date` partitions older than 90 days. Afterwards bronze stays readable by Spark, the status processor keeps running, and data inside retention is untouched. | NFR-08 | TS-O-03 |
 
+## Step 8 (observability) — acceptance criteria
+
+**Scope:** Prometheus metrics from the streaming processor and the batch jobs, alert rules, and Grafana dashboards
+(`obs` profile). These criteria rely on **SC-0007** (approved).
+
+| AC | Criterion | Reqs | Test |
+|---|---|---|---|
+| AC-8.1 | **Endpoint:** the processor serves `/metrics` on `METRICS_PORT` with the SC-0007 metric set (HELP/TYPE present). Labels are bounded: `query`, `error_code`, `stage`, `sink` only; never a package or event id. | FR-OBS-01 | TS-M-01 |
+| AC-8.2 | **Counters are exact:** after a generator run, `ptp_input_rows_total` = `records_total`, `ptp_events_rejected_total` by `error_code` = `malformed_by_error_code`, `ptp_events_applied_total` = `unique_valid_events`, `ptp_events_duplicate_total` = `duplicate_copies` (and equal the `ops.sink_batches` sums) | FR-OBS-01, KPI-P2 | TS-M-01 |
+| AC-8.3 | **Progress metrics:** `ptp_batch_duration_seconds` count = committed batches; `ptp_offsets_behind_latest` is 0 once caught up; `ptp_last_progress_timestamp_seconds` is recent for both queries | FR-OBS-01 | TS-M-01 |
+| AC-8.4 | **Batch jobs:** silver, gold, dq, replay and maintenance push last-success timestamp, duration and outcome to the Pushgateway; DQ pushes one series per check with its status | FR-OBS-01, DQ-* | TS-M-02 |
+| AC-8.5 | **Prometheus:** scrapes the processor and the Pushgateway (targets up); rule files pass `promtool check rules` | FR-OBS-03 | `make verify-obs` |
+| AC-8.6 | **Alert rules are tested:** `promtool test rules` shows each alert firing on synthetic series built for it and staying silent on a healthy series | FR-OBS-03 | TS-M-03 |
+| AC-8.7 | **Live alerts:** stopping the processor fires `PtpProcessorDown`; a planted critical DQ failure fires `PtpDqCriticalFailure` (observed through the Prometheus API with a bounded wait) | FR-OBS-03 | `make verify-obs` |
+| AC-8.8 | **Grafana:** provisioned datasources and dashboards load without errors (by uid, through the API). Every `ptp_*` metric referenced by a dashboard or rule exists in Prometheus. | FR-OBS-03 | `make verify-obs` |
+| AC-8.9 | **Security:** Prometheus, Pushgateway and Grafana bind to 127.0.0.1 only; Grafana's admin password comes from `.env`; its Postgres datasource uses the read-only `ptp_reader` | NFR-06 | `make verify-obs` |
+
 ## First vertical slice — acceptance criteria (P0)
 
 **Scope:** generator → Kafka → validation → DLQ, and status in Postgres with dedup and
@@ -181,6 +198,9 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-D-05 | SQL query pack on a hand-computed fixture, as `ptp_reader` (AC-6.10) | FR-ANL-02 | P1 |
 | TS-D-06 | DQ job on clean data: one result per check, all pass/warn, DQ-10 skipped, anomalies = oracle, idempotent (AC-7.1/7.2/7.5) | DQ-02…10 | P1 |
 | TS-D-07 | DQ fault sequence: each check catches its planted fault, others unchanged; exit codes (AC-7.3/7.4) | DQ-02…09 | P1 |
+| TS-M-01 | `/metrics`: exact counters vs the generator, bounded labels, progress gauges; heartbeat: idle = 0 s, hung batch grows (AC-8.1–8.3) | FR-OBS-01 | P1 |
+| TS-M-02 | Pushgateway: success/failure/DQ series; an unreachable gateway never fails a job (AC-8.4) | FR-OBS-01 | P1 |
+| TS-M-03 | `promtool test rules`: each of the 8 alerts fires on its synthetic series and stays silent on healthy ones (AC-8.6) | FR-OBS-03 | P1 |
 | TS-O-01 | DAG integrity inside Airflow: imports, task graph, retries, timeouts, run-scoped commands, secrets kept out of templated env (AC-7.8) | FR-DEV-01 | P1 |
 | TS-O-02 | `make verify-airflow`: health/auth/DB isolation, lake_daily end to end and with a planted fault, replay valid/invalid, maintenance (AC-7.7–7.11) | FR-ANL-01, FR-REC-02, NFR-08 | P1 |
 | TS-O-03 | Retention: expiry in all three stores; deleting a log-referenced bronze partition keeps bronze readable and writable (AC-7.11) | NFR-08 | P1 |

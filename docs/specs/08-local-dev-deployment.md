@@ -21,7 +21,7 @@ No cloud account and no paid service are needed.
 |---|---|---|
 | `core` | ✅ kafka, kafka-init, postgres, pg-migrate (Flyway) | Kafka 1 GB, Postgres 512 MB limits |
 | `stream` | ✅ spark-processor (`ptp-jobs` image; status processor + bronze writer); alternatively `make process` on the host | 3 GB limit (driver 2 GB) | Limits: Kafka 1 GB (≈410 MiB measured idle), Postgres 512 MB (≈22 MiB idle); Spark driver 2–3 GB planned |
-| `obs` | prometheus, grafana | ~0.5 GB |
+| `obs` | ✅ prometheus, pushgateway, grafana | 512 MB / 64 MB / 512 MB limits |
 | `orchestration` | ✅ airflow (`standalone`, LocalExecutor, metadata DB `airflow`), docker-proxy | Airflow 2 GB limit, proxy 64 MB; job containers 2 GB each |
 
 ## Make targets
@@ -39,6 +39,9 @@ No cloud account and no paid service are needed.
 | `make secrets-scan` | gitleaks over the git history (pinned image) | ✅ |
 | `make lock` | Re-lock Python deps with hashes (`uv`, `--exclude-newer`) | ✅ |
 | `make ci` | `check-pins` + `lint` + `test` | ✅ |
+| `make obs-up` / `make obs-down` | Prometheus (127.0.0.1:9090), Pushgateway (:9091), Grafana (http://127.0.0.1:3000, `admin` / `GRAFANA_ADMIN_PASSWORD`) | ✅ |
+| `make test-alerts` | `promtool check rules` + `promtool test rules` (Docker only) | ✅ |
+| `make verify-obs` | AC-8.3…8.9 live: targets, dashboards, panel queries, metric references, bindings, live alerts | ✅ |
 | `make airflow-up` / `make airflow-down` | Airflow + docker-proxy; UI http://127.0.0.1:8080 (user `admin`, `AIRFLOW_ADMIN_PASSWORD`). DAGs start paused. | ✅ |
 | `make verify-airflow` | AC-7.7…7.11 end to end (needs `make up`, `make image` and data in bronze) | ✅ |
 | `make generate [SCENARIO=…] [SINK=kafka\|file]` | Run the generator; outputs go to `data/generator/<scenario>/` | ✅ |
@@ -90,7 +93,9 @@ No cloud account and no paid service are needed.
 | `LIVE_MAX_EVENT_AGE` | `30 days` | |
 | `PROCESSING_MODE` | `live` | `live` \| `replay` |
 | `PG_RETRY_MAX_ATTEMPTS` / `PG_RETRY_MAX_DELAY` | `5` / `30s` | |
-| `METRICS_PORT` | `9464` | |
+| `METRICS_PORT` / `METRICS_BIND_ADDRESS` | `9464` / `127.0.0.1` on the host (`0.0.0.0` in the container, not published) | ✅ |
+| `PUSHGATEWAY_URL` | `localhost:9091` on the host; `http://pushgateway:9091` for job containers | ✅ unset = no push |
+| `GRAFANA_ADMIN_PASSWORD` | *(generated)* | ✅ secret |
 
 ## Deployment
 

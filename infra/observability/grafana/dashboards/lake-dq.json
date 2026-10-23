@@ -1,0 +1,238 @@
+{
+  "uid": "ptp-lake-dq",
+  "title": "PTP \u2014 Lake & Data Quality",
+  "description": "Silver/gold/DQ/replay/maintenance runs (Pushgateway) and run history (read-only Postgres, SC-0007 D).",
+  "tags": [
+    "ptp"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Batch jobs: hours since last success",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ptp-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ptp-prometheus"
+          },
+          "expr": "(time() - ptp_batch_last_success_timestamp_seconds) / 3600",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Batch jobs: last run succeeded (1) / failed (0)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ptp-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ptp-prometheus"
+          },
+          "expr": "ptp_batch_success",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "DQ checks failing in the last run",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ptp-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ptp-prometheus"
+          },
+          "expr": "ptp_dq_check_failed == 1",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Anomalies found by the last DQ run",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ptp-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ptp-prometheus"
+          },
+          "expr": "ptp_status_anomalies",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Latest DQ run (ops.dq_results)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "ptp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "ptp-postgres"
+          },
+          "rawSql": "SELECT check_id, status, severity, observed, threshold, array_to_string(sample, ', ') AS sample, detail, checked_at FROM ops.dq_results WHERE run_id = (SELECT run_id FROM ops.dq_results ORDER BY checked_at DESC LIMIT 1) ORDER BY check_id",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Gold runs (ops.gold_runs)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "ptp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "ptp-postgres"
+          },
+          "rawSql": "SELECT run_id, as_of, status, started_at, finished_at, delivery_facts, facility_visits, error FROM ops.gold_runs ORDER BY started_at DESC LIMIT 20",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Replay runs (ops.replay_runs)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "ptp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "ptp-postgres"
+          },
+          "rawSql": "SELECT run_id, ingest_date_from, ingest_date_to, mode, dry_run, status, input_rows, applied_rows, duplicate_rows, rejected_rows, error FROM ops.replay_runs ORDER BY started_at DESC LIMIT 20",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "On-time delivery by day (KPI-B1, analytics.daily_delivery_performance)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "ptp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "ptp-postgres"
+          },
+          "rawSql": "SELECT delivery_date, sum(delivered_count) AS delivered, round(100.0 * sum(on_time_count) / sum(delivered_count), 2) AS on_time_pct FROM analytics.daily_delivery_performance GROUP BY delivery_date ORDER BY delivery_date DESC LIMIT 14",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        }
+      ]
+    }
+  ]
+}

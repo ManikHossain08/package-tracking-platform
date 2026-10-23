@@ -34,7 +34,7 @@
 | **batch jobs** (Spark batch, Scala) | Silver build, gold aggregates, replay, DQ checks, reconciliation | Real-time status |
 | **Airflow** | Schedules batch jobs; manual replay DAG with parameters; retries; SLAs | Business logic (DAGs only call jobs) |
 | **PostgreSQL** | Serving store for status and gold; pipeline bookkeeping | Long-term raw history (that is Parquet) |
-| **Prometheus / Grafana** | Metrics scraping, dashboards, alert rules | Log storage (logs go to stdout as JSON) |
+| **Prometheus / Pushgateway / Grafana** (`obs` profile) | Scrapes the processor; receives batch-job pushes; evaluates tested alert rules; dashboards (Prometheus + read-only Postgres run history). SC-0007. | Log storage (logs go to stdout as JSON); alert notification routing (no Alertmanager locally) |
 
 `processor-core` is shared by streaming, replay and batch. That is what makes FR-REC-02
 ("replay through the same code") true by construction.

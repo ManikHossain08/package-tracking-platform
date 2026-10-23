@@ -2,7 +2,7 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1–7 are done (4 = first vertical slice; 5 = bronze + replay; 6 = silver + gold; 7 = DQ job, jobs image, Airflow).
+> empty until the step that implements them. Steps 1–8 are done (4 = first vertical slice; 5 = bronze + replay; 6 = silver + gold; 7 = DQ, jobs image, Airflow; 8 = observability).
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
@@ -30,9 +30,9 @@
 | FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅, `replay_from_bronze` DAG ✅ (TS-O-02) | ✅ Verified |
 | FR-REC-03 | P1 | 01, 06 | 0002 | — | TS-R-02 | Specified |
 | FR-REC-04 | P2 | 01, 06 | — | — | TS-R-07 | Specified |
-| FR-OBS-01 | P1 | 01, 04 | — | — | metric contract test | Specified |
+| FR-OBS-01 | P1 | 01, 04 | SC-0007 | `ProcessorMetrics.scala` (endpoint, progress listener, heartbeat), `lake/BatchMetrics.scala` (Pushgateway) | TS-M-01 ✅ (exact counters vs generator), heartbeat test ✅ (idle vs hung batch), TS-M-02 ✅ (pushes), `make verify-obs` ✅ | ✅ Verified (late/semantic-dup/state/retry metrics arrive with their features) |
 | FR-OBS-02 | P0 | 01, 06 | — | `StructuredLog.scala`, `ptp.events` logger | TS-U-08 ✅, AC-1.8 in TS-R-01 ✅ | ✅ Verified |
-| FR-OBS-03 | P2 | 01 | — | — | — | Specified |
+| FR-OBS-03 | P2 | 01 | SC-0007 | `infra/observability/` (Prometheus config, 8 alert rules, Grafana provisioning + 2 dashboards) | TS-M-03 ✅ (`promtool test rules`), live alerts ✅ (processor down, DQ failure, no false stall on idle), 22 panel queries ✅ | ✅ Verified (no Alertmanager by decision) |
 | FR-DEV-01 | P0 | 01, 08 | 0001, 0009 | `Makefile`, `infra/`, `processor/build.sbt`, `infra/jobs/` (ptp-jobs image) | `SparkRuntimeSmokeSpec` ✅, `make verify` ✅, `make verify-processor` ✅ (AC-7.6: reconcile + graceful stop, exit 0) | ✅ Verified (core, stream, orchestration profiles) |
 | FR-DEV-02 | P0 | 01 | — | `.github/workflows/ci.yml` (checks, scala, integration, stack jobs) | CI run pending: no GitHub remote yet | Implemented, not yet run |
 | FR-DEV-03 | P1 | 01 | — | — | CI | Specified |

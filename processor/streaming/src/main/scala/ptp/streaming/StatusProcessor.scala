@@ -63,6 +63,7 @@ final class StatusProcessor(
       stage = "record-batch"
       PostgresStatusSink.recordBatch(config.jdbc, SinkBatch(config.queryName, batchId, runId, config.processorVersion,
         startedAt, clock(), counts.input, counts.valid, counts.rejected, counts.applied, counts.duplicates, counts.offsetRanges))
+      ProcessorMetrics.recordBatch(config.queryName, counts, java.time.Duration.between(startedAt, clock()).toMillis / 1000.0)
       log.info("batch committed to sinks", "run_id" -> runId, "query_name" -> config.queryName, "batch_id" -> batchId,
         "input_rows" -> counts.input, "valid_rows" -> counts.valid, "rejected_rows" -> counts.rejected,
         "applied_rows" -> counts.applied, "duplicate_rows" -> counts.duplicates, "offset_range" -> counts.offsetRanges)
@@ -77,6 +78,7 @@ final class StatusProcessor(
           case "record-batch" => ("SINK_BATCHES_FAILED", "Check ops.sink_batches; status rows are already committed and re-run is idempotent")
           case _              => ("BATCH_FAILED", "Inspect the error; offsets are not committed and the batch is re-run on restart")
         }
+        ProcessorMetrics.sinkFailures.labelValues(stage).inc()
         log.error("micro-batch failed", "run_id" -> runId, "query_name" -> config.queryName, "batch_id" -> batchId,
           "error_code" -> code, "stage" -> stage, "offset_range" -> counts.offsetRanges, "topic" -> config.eventsTopic,
           "error" -> s"${e.getClass.getName}: ${Option(e.getMessage).getOrElse("")}".take(500), "action" -> action)

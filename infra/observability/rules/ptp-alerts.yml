@@ -1,0 +1,63 @@
+# FR-OBS-03 alert rules (SC-0007 C). Each one is unit-tested in ptp-alerts.test.yml (`make test-alerts`).
+groups:
+  - name: ptp-streaming
+    rules:
+      - alert: PtpProcessorDown
+        expr: max(up{job="ptp-processor"}) == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Status processor is not running (no metrics endpoint answers)"
+          action: "Start it (make stream-up or make process); it resumes from its checkpoint, no data is lost while Kafka retains it"
+      # A hung micro-batch, not an idle query: Spark posts no progress while idle, so "time since last progress"
+      # would raise false alarms (and none at all after a restart). The heartbeat samples query status instead.
+      - alert: PtpQueryStalled
+        expr: max by (query) (ptp_trigger_active_seconds) > 300
+        for: 1m
+        labels: {severity: high}
+        annotations:
+          summary: "Query {{ $labels.query }} has been stuck in one trigger for over 5 minutes"
+          action: "Check the processor logs; the micro-batch may be blocked on Kafka or Postgres (locks, connections)"
+      - alert: PtpDriverUnresponsive
+        expr: (time() - max(ptp_heartbeat_timestamp_seconds) > 120) and on() (max(up{job="ptp-processor"}) == 1)
+        for: 1m
+        labels: {severity: high}
+        annotations:
+          summary: "The processor's metrics endpoint answers, but its driver heartbeat is older than 2 minutes"
+          action: "The driver may be in a long GC pause or deadlocked; capture a thread dump, then restart it"
+      - alert: PtpConsumerLagGrowing
+        expr: max by (query) (ptp_offsets_behind_latest) > 1000 and max by (query) (deriv(ptp_offsets_behind_latest[10m])) > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.query }} is falling behind: {{ $value }} offsets and growing"
+          action: "Input rate exceeds throughput; check batch duration, raise MAX_OFFSETS_PER_TRIGGER or resources"
+      - alert: PtpDlqRateHigh
+        expr: |
+          sum(rate(ptp_events_rejected_total[10m]))
+            / sum(rate(ptp_input_rows_total{query="status-processor"}[10m])) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5 % of records go to the DLQ"
+          action: "Inspect ptp_events_rejected_total by error_code and the DLQ topic; a producer may have changed its payload"
+      - alert: PtpSinkFailures
+        expr: sum by (sink) (increase(ptp_sink_failures_total[15m])) > 0
+        labels: {severity: high}
+        annotations:
+          summary: "Micro-batches failed at stage {{ $labels.sink }} in the last 15 minutes"
+          action: "Check Postgres/Kafka health and the processor's error logs; batches are re-run on restart (idempotent)"
+  - name: ptp-batch
+    rules:
+      - alert: PtpDqCriticalFailure
+        expr: max by (check_id) (ptp_dq_check_failed{severity=~"critical|high"}) == 1
+        labels: {severity: critical}
+        annotations:
+          summary: "Data-quality check {{ $labels.check_id }} failed"
+          action: "See ops.dq_results (sample column) for the affected ids"
+      - alert: PtpLakeStale
+        expr: time() - ptp_batch_last_success_timestamp_seconds{task="gold"} > 3 * 3600
+        labels: {severity: warning}
+        annotations:
+          summary: "Gold has not been loaded successfully for over 3 hours"
+          action: "Check the lake_daily DAG in Airflow"

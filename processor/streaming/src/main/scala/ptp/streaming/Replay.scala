@@ -95,7 +95,7 @@ object ReplayApp {
     val config = ProcessorConfig.fromEnv(sys.env).fold(fail, identity)
     val spark = SparkSession.builder().appName("ptp-replay").master(sys.env.getOrElse("SPARK_MASTER", "local[*]"))
       .config("spark.sql.shuffle.partitions", sys.env.getOrElse("SHUFFLE_PARTITIONS", "6")).getOrCreate()
-    try Replay.run(spark, config.lakeRoot, config.jdbc, request, config.validation, log = log)
+    try ptp.lake.BatchMetrics.fromEnv().timed("replay")(Replay.run(spark, config.lakeRoot, config.jdbc, request, config.validation, log = log))
     finally spark.stop()
   }
 }

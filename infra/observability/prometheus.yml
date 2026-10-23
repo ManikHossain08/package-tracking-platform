@@ -1,0 +1,21 @@
+# Prometheus for the local stack (SC-0007). Alert rules are evaluated here; no Alertmanager (notification routing is
+# the documented production step).
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+rule_files:
+  - /etc/prometheus/rules/ptp-alerts.yml
+
+scrape_configs:
+  - job_name: ptp-processor
+    # The spark-processor container, or `make process` on the host. Only one runs at a time; alerts use max(up).
+    static_configs:
+      - targets: ["spark-processor:9464", "host.docker.internal:9464"]
+  - job_name: pushgateway
+    honor_labels: true  # keep the job/task labels the batch jobs push with
+    static_configs:
+      - targets: ["pushgateway:9091"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

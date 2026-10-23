@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query jar image spark-jars stream-up stream-down verify-processor airflow-up airflow-down verify-airflow status reconcile check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query jar image spark-jars stream-up stream-down verify-processor airflow-up airflow-down verify-airflow obs-up obs-down test-alerts verify-obs status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -128,6 +128,20 @@ airflow-down: ## Stop Airflow and the docker proxy
 
 verify-airflow: ## AC-7.7..7.10: Airflow health, auth, DB isolation, DAG integrity, end-to-end DAG runs (needs image + data)
 	COMPOSE="$(COMPOSE)" scripts/verify_airflow.sh
+
+PROM_IMAGE := prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
+obs-up: env ## Start Prometheus, Pushgateway and Grafana (http://127.0.0.1:3000, admin / GRAFANA_ADMIN_PASSWORD)
+	$(COMPOSE) --profile core --profile obs up -d --wait --wait-timeout 180 prometheus pushgateway grafana
+
+obs-down: ## Stop the observability services
+	$(COMPOSE) --profile core --profile obs stop prometheus pushgateway grafana
+
+test-alerts: ## AC-8.5/8.6: promtool check + unit tests for the alert rules (Docker only)
+	docker run --rm -v "$(CURDIR)/infra/observability:/obs:ro" -w /obs/rules --entrypoint promtool $(PROM_IMAGE) check rules ptp-alerts.yml
+	docker run --rm -v "$(CURDIR)/infra/observability:/obs:ro" -w /obs/rules --entrypoint promtool $(PROM_IMAGE) test rules ptp-alerts.test.yml
+
+verify-obs: ## AC-8.5..8.9 against the running stack (needs make up, obs-up, image)
+	COMPOSE="$(COMPOSE)" scripts/verify_obs.sh
 
 LAKE_RUN = set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
   sbt -batch "streaming/runMain ptp.lake.LakeApp

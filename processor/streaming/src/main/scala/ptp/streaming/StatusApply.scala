@@ -11,7 +11,8 @@ import ptp.core.status.ApplyEvent
 import ptp.core.validation.{ProcessingMode, ValidationConfig}
 
 /** Counts for one apply run (a micro-batch or a replay). */
-final case class ApplyCounts(input: Long, valid: Long, applied: Long, duplicates: Long, offsetRanges: String) {
+final case class ApplyCounts(input: Long, valid: Long, applied: Long, duplicates: Long, offsetRanges: String,
+                             rejectedByCode: Map[String, Long] = Map.empty) {
   def rejected: Long = input - valid
 }
 
@@ -50,7 +51,10 @@ object StatusApply {
       val input = perPartition.map(_._4).sum
       val valid = perPartition.map(_._5).sum
       val ranges = perPartition.sortBy(_._1).map { case (p, lo, hi, _, _) => s""""$p":[$lo,$hi]""" }.mkString("{", ",", "}")
-      if (input == 0 || !write) return ApplyCounts(input, valid, 0, 0, ranges)
+      val byCode =
+        if (input == valid) Map.empty[String, Long]
+        else classified.filter(!col("valid")).groupBy("errorCode").count().as[(String, Long)].collect().toMap
+      if (input == 0 || !write) return ApplyCounts(input, valid, 0, 0, ranges, byCode)
 
       onStage("dlq")
       dlq.filter(_ => input > valid).foreach { target =>
@@ -76,7 +80,7 @@ object StatusApply {
         applied.add(r.applied)
         duplicates.add(r.duplicates)
       }
-      ApplyCounts(input, valid, applied.sum, duplicates.sum, ranges)
+      ApplyCounts(input, valid, applied.sum, duplicates.sum, ranges, byCode)
     } finally classified.unpersist()
   }
 }

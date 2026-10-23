@@ -43,7 +43,7 @@ Exit code: non-zero if any **critical or high** check fails. Warnings never fail
 
 ## D. Deferred
 
-Prometheus metrics for DQ results (FR-OBS-01) come with the observability step. Results are queryable in `ops.dq_results` until then.
+Prometheus metrics for DQ results (FR-OBS-01) come with the observability step (delivered by SC-0007 B). Results are queryable in `ops.dq_results` until then.
 
 ## Decision
 

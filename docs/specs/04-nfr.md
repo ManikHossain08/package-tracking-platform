@@ -40,17 +40,23 @@
 
 Prefix `ptp_`. Labels: `query`, plus `error_code` / `reason` where relevant. No high-cardinality labels such as package or event IDs.
 
-| Metric | Type |
-|---|---|
-| `ptp_input_rows_total`, `ptp_processed_rows_total` | counter |
-| `ptp_events_valid_total`, `ptp_events_rejected_total{error_code}` | counter |
-| `ptp_events_duplicate_total{stage=stream\|sink}`, `ptp_events_semantic_duplicate_total` | counter |
-| `ptp_events_late_total`, `ptp_status_anomalies_total{code}` | counter |
-| `ptp_batch_duration_seconds` | histogram |
-| `ptp_offsets_behind_latest` | gauge (from `StreamingQueryProgress` source metrics) |
-| `ptp_state_rows` | gauge |
-| `ptp_sink_retries_total{sink}`, `ptp_sink_failures_total{sink}` | counter |
-| `ptp_last_progress_timestamp_seconds` | gauge (stall detection) |
+| Metric | Type | Status (SC-0007 A) |
+|---|---|---|
+| `ptp_input_rows_total{query}` | counter | ✅ step 8 |
+| `ptp_events_valid_total`, `ptp_events_rejected_total{error_code}` | counter | ✅ step 8 |
+| `ptp_events_applied_total` (was `ptp_processed_rows_total`) | counter | ✅ step 8 (SC-0007) |
+| `ptp_events_duplicate_total{stage}` | counter | ✅ `stage="sink"`; `stage="stream"` with FR-DED-02 |
+| `ptp_batch_duration_seconds{query}` | histogram | ✅ step 8 |
+| `ptp_offsets_behind_latest{query}` | gauge (Kafka source progress, `maxOffsetsBehindLatest`) | ✅ step 8 |
+| `ptp_last_progress_timestamp_seconds{query}` | gauge (stall detection) | ✅ step 8 |
+| `ptp_sink_failures_total{sink}` | counter | ✅ step 8 (known stages pre-initialised at 0) |
+| `ptp_trigger_active_seconds{query}`, `ptp_heartbeat_timestamp_seconds` | gauges (driver heartbeat, 10 s) | ✅ step 8: stall/hang detection (Spark posts no progress while idle) |
+| `ptp_batch_last_success_timestamp_seconds`, `ptp_batch_duration_seconds`, `ptp_batch_success` (Pushgateway, `job`/`task`) | gauges | ✅ step 8 (SC-0007 B) |
+| `ptp_dq_check_failed{check_id,severity}`, `ptp_status_anomalies{code}` (Pushgateway) | gauges | ✅ step 8 |
+| `ptp_events_late_total` | counter | ⏳ with FR-LATE-01 |
+| `ptp_events_semantic_duplicate_total` | counter | ⏳ with FR-DED-03 (stream) |
+| `ptp_state_rows` | gauge | ⏳ with FR-DED-02 |
+| `ptp_sink_retries_total{sink}` | counter | ⏳ with FR-REC-03 |
 
 Note: Spark does not commit consumer-group offsets to Kafka, so Kafka-side lag exporters
 cannot see this consumer. Lag comes from Spark's own progress metrics.

@@ -204,18 +204,24 @@ object LakeApp {
       .config("spark.sql.shuffle.partitions", sys.env.getOrElse("SHUFFLE_PARTITIONS", "6"))
       .config("spark.sql.session.timeZone", "UTC").getOrCreate()
     val asOf = date("as-of").getOrElse(LocalDate.now(ZoneOffset.UTC))
-    def dq(): Int = DqJob.run(spark, config, DqConfig(asOf, java.time.Instant.now(), config.kafkaBootstrapServers,
-      config.eventsTopic, config.dlqTopic)).exitCode
+    val metrics = BatchMetrics.fromEnv()
+    def dq(): Int = {
+      val started = System.nanoTime()
+      val report = metrics.timedFailure("dq")(DqJob.run(spark, config, DqConfig(asOf, java.time.Instant.now(),
+        config.kafkaBootstrapServers, config.eventsTopic, config.dlqTopic)))
+      metrics.pushDq(report, (System.nanoTime() - started) / 1e9)
+      report.exitCode
+    }
     val exit =
       try args.headOption match {
-        case Some("silver") => SilverBuild.run(spark, config, for (f <- date("from"); t <- date("to")) yield (f, t)); 0
-        case Some("gold")   => GoldLoad.run(spark, config, asOf); 0
+        case Some("silver") => metrics.timed("silver")(SilverBuild.run(spark, config, for (f <- date("from"); t <- date("to")) yield (f, t))); 0
+        case Some("gold")   => metrics.timed("gold")(GoldLoad.run(spark, config, asOf)); 0
         case Some("dq")     => dq()
-        case Some("all")    => SilverBuild.run(spark, config); GoldLoad.run(spark, config, asOf); dq()
+        case Some("all")    => metrics.timed("silver")(SilverBuild.run(spark, config)); metrics.timed("gold")(GoldLoad.run(spark, config, asOf)); dq()
         case Some("maintenance") =>
           def days(k: String, d: Int) = sys.env.get(k).flatMap(_.toIntOption).filter(_ > 0).getOrElse(d)
-          Retention.run(spark, config, asOf, RetentionConfig(days("BRONZE_RETENTION_DAYS", 90),
-            days("SILVER_RETENTION_DAYS", 400), days("PROCESSED_EVENTS_RETENTION_DAYS", 30))); 0
+          metrics.timed("maintenance")(Retention.run(spark, config, asOf, RetentionConfig(days("BRONZE_RETENTION_DAYS", 90),
+            days("SILVER_RETENTION_DAYS", 400), days("PROCESSED_EVENTS_RETENTION_DAYS", 30)))); 0
         case _              => fail("first argument must be silver, gold, dq, all or maintenance")
       } finally spark.stop()
     sys.exit(exit) // AC-7.4: a critical/high DQ failure fails the caller (make, Airflow)

@@ -6,6 +6,7 @@ val scalatestVersion      = "3.2.20"
 val scalatestPlusVersion  = "3.2.20.0" // scalatestplus scalacheck-1-19
 val jsonSchemaValidatorVersion = "1.5.9" // test only: validates DLQ output against contracts/
 val testcontainersVersion = "2.0.5"
+val prometheusClientVersion = "1.9.0"   // io.prometheus:prometheus-metrics-* (SC-0007)
 
 ThisBuild / organization := "ptp"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
@@ -65,6 +66,9 @@ lazy val streaming = (project in file("streaming"))
       // Not in the apache/spark image, so bundled into the jobs jar (ADR-0009).
       "org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion,
       "org.postgresql"    % "postgresql"           % postgresJdbcVersion,
+      "io.prometheus"     % "prometheus-metrics-core"                % prometheusClientVersion,
+      "io.prometheus"     % "prometheus-metrics-exporter-httpserver" % prometheusClientVersion,
+      "io.prometheus"     % "prometheus-metrics-exporter-pushgateway" % prometheusClientVersion,
       "org.testcontainers" % "testcontainers-kafka"      % testcontainersVersion % Test,
       "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test
     ) ++ testDeps,

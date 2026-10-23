@@ -1,0 +1,143 @@
+# promtool unit tests for ptp-alerts.yml (AC-8.6): each alert fires on series built for it and not on healthy series.
+rule_files:
+  - ptp-alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: processor down fires after 1m; one healthy target is enough
+    interval: 1m
+    input_series:
+      - series: 'up{job="ptp-processor", instance="spark-processor:9464"}'
+        values: '1 1 0 0 0'
+      - series: 'up{job="ptp-processor", instance="host.docker.internal:9464"}'
+        values: '0 0 0 0 0'
+    alert_rule_test:
+      - {alertname: PtpProcessorDown, eval_time: 1m, exp_alerts: []}
+      - alertname: PtpProcessorDown
+        eval_time: 4m
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Status processor is not running (no metrics endpoint answers)"
+              action: "Start it (make stream-up or make process); it resumes from its checkpoint, no data is lost while Kafka retains it"
+
+  - name: a hung trigger fires; idle and normally busy queries do not
+    interval: 1m
+    input_series:
+      - series: 'ptp_trigger_active_seconds{query="stuck"}'
+        values: '0 60 120 180 240 300 360 420 480'
+      - series: 'ptp_trigger_active_seconds{query="idle"}'
+        values: '0x8'
+      - series: 'ptp_trigger_active_seconds{query="busy"}'
+        values: '0 3 0 4 0 2 0 5 0'
+    alert_rule_test:
+      - {alertname: PtpQueryStalled, eval_time: 5m, exp_alerts: []}
+      - alertname: PtpQueryStalled
+        eval_time: 8m
+        exp_alerts:
+          - exp_labels: {severity: high, query: stuck}
+            exp_annotations:
+              summary: "Query stuck has been stuck in one trigger for over 5 minutes"
+              action: "Check the processor logs; the micro-batch may be blocked on Kafka or Postgres (locks, connections)"
+
+  - name: driver unresponsive fires only while the endpoint is up
+    interval: 1m
+    input_series:
+      # Unix seconds; the test clock starts at 0. The heartbeat stops at t=60.
+      - series: 'ptp_heartbeat_timestamp_seconds{instance="spark-processor:9464", job="ptp-processor"}'
+        values: '0 60 60 60 60 60'
+      - series: 'up{job="ptp-processor", instance="spark-processor:9464"}'
+        values: '1 1 1 1 1 1'
+    alert_rule_test:
+      - {alertname: PtpDriverUnresponsive, eval_time: 2m, exp_alerts: []}
+      - alertname: PtpDriverUnresponsive
+        eval_time: 5m
+        exp_alerts:
+          - exp_labels: {severity: high}
+            exp_annotations:
+              summary: "The processor's metrics endpoint answers, but its driver heartbeat is older than 2 minutes"
+              action: "The driver may be in a long GC pause or deadlocked; capture a thread dump, then restart it"
+
+  - name: lag growing fires only when large and rising for 10m
+    interval: 1m
+    input_series:
+      - series: 'ptp_offsets_behind_latest{query="growing"}'
+        values: '2000+500x30'
+      - series: 'ptp_offsets_behind_latest{query="large_but_draining"}'
+        values: '50000-100x30'
+      - series: 'ptp_offsets_behind_latest{query="small"}'
+        values: '0+10x30'
+    alert_rule_test:
+      - alertname: PtpConsumerLagGrowing
+        eval_time: 25m
+        exp_alerts:
+          - exp_labels: {severity: warning, query: growing}
+            exp_annotations:
+              summary: "growing is falling behind: 14500 offsets and growing"
+              action: "Input rate exceeds throughput; check batch duration, raise MAX_OFFSETS_PER_TRIGGER or resources"
+
+  - name: DLQ rate above 5% fires; 2% does not
+    interval: 1m
+    input_series:
+      - series: 'ptp_input_rows_total{query="status-processor"}'
+        values: '0+1000x30'
+      - series: 'ptp_events_rejected_total{error_code="INVALID_JSON"}'
+        values: '0+20x15 300+100x15'
+    alert_rule_test:
+      - {alertname: PtpDlqRateHigh, eval_time: 14m, exp_alerts: []}
+      - alertname: PtpDlqRateHigh
+        eval_time: 30m
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "More than 5 % of records go to the DLQ"
+              action: "Inspect ptp_events_rejected_total by error_code and the DLQ topic; a producer may have changed its payload"
+
+  - name: sink failures fire per sink
+    interval: 1m
+    input_series:
+      - series: 'ptp_sink_failures_total{sink="postgres"}'
+        values: '0 0 1 1 1'
+      - series: 'ptp_sink_failures_total{sink="dlq"}'
+        values: '0 0 0 0 0'
+    alert_rule_test:
+      - alertname: PtpSinkFailures
+        eval_time: 4m
+        exp_alerts:
+          - exp_labels: {severity: high, sink: postgres}
+            exp_annotations:
+              summary: "Micro-batches failed at stage postgres in the last 15 minutes"
+              action: "Check Postgres/Kafka health and the processor's error logs; batches are re-run on restart (idempotent)"
+
+  - name: DQ critical/high failures fire; warnings do not
+    interval: 1m
+    input_series:
+      - series: 'ptp_dq_check_failed{check_id="DQ-07", severity="critical", job="ptp", task="dq"}'
+        values: '1'
+      - series: 'ptp_dq_check_failed{check_id="DQ-09", severity="warn", job="ptp", task="dq"}'
+        values: '1'
+      - series: 'ptp_dq_check_failed{check_id="DQ-02", severity="critical", job="ptp", task="dq"}'
+        values: '0'
+    alert_rule_test:
+      - alertname: PtpDqCriticalFailure
+        eval_time: 0m
+        exp_alerts:
+          - exp_labels: {severity: critical, check_id: DQ-07}
+            exp_annotations:
+              summary: "Data-quality check DQ-07 failed"
+              action: "See ops.dq_results (sample column) for the affected ids"
+
+  - name: stale gold fires after 3h
+    interval: 1h
+    input_series:
+      - series: 'ptp_batch_last_success_timestamp_seconds{task="gold", job="ptp"}'
+        values: '0x5'
+    alert_rule_test:
+      - {alertname: PtpLakeStale, eval_time: 2h, exp_alerts: []}
+      - alertname: PtpLakeStale
+        eval_time: 4h
+        exp_alerts:
+          - exp_labels: {severity: warning, task: gold, job: ptp}
+            exp_annotations:
+              summary: "Gold has not been loaded successfully for over 3 hours"
+              action: "Check the lake_daily DAG in Airflow"

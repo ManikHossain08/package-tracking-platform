@@ -31,6 +31,8 @@ jobs:
         run: make secrets-scan
       - name: Lint and Python tests
         run: make lint test-py
+      - name: Alert rule unit tests (promtool)
+        run: make test-alerts
 
   scala:
     name: scala + spark smoke
@@ -88,6 +90,8 @@ jobs:
       - uses: sbt/setup-sbt@2d56c68508d12eef34cb068bac1c8e7f9523bbd9 # v1.5.12
       - name: Jobs image + containerised processor (AC-7.6)
         run: make image verify-processor
+      - name: Observability (AC-8.5..8.9)
+        run: make obs-up verify-obs
       - name: Logs on failure
         if: failure()
         run: docker compose --project-directory infra -f infra/docker-compose.yml --env-file .env --profile core logs --no-color

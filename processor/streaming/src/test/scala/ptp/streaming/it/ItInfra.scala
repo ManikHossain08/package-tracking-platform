@@ -34,7 +34,7 @@ object ItInfra {
   val mapper: JsonMapper = JsonMapper.builder().build()
 
   /** `repo:tag@sha256:…` from infra/docker-compose.yml, as a digest-pinned image reference. */
-  private def composeImage(repo: String): DockerImageName = {
+  def composeImage(repo: String): DockerImageName = {
     val compose = Files.readString(repoRoot.resolve("infra/docker-compose.yml"))
     val ref = s"""image: ($repo):[\\w.-]+@(sha256:[0-9a-f]{64})""".r
       .findFirstMatchIn(compose).getOrElse(sys.error(s"image $repo not found in docker-compose.yml"))

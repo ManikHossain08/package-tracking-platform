@@ -20,11 +20,16 @@ object StatusProcessorApp {
       .master(sys.env.getOrElse("SPARK_MASTER", "local[*]"))
       .config("spark.sql.shuffle.partitions", sys.env.getOrElse("SHUFFLE_PARTITIONS", "6"))
       .getOrCreate()
+    val metricsPort   = sys.env.get("METRICS_PORT").flatMap(_.toIntOption).getOrElse(9464)
+    val metricsServer = ProcessorMetrics.serve(metricsPort, sys.env.getOrElse("METRICS_BIND_ADDRESS", "0.0.0.0"))
+    spark.streams.addListener(ProcessorMetrics.listener)
+    log.info("metrics endpoint", "port" -> metricsServer.getPort)
     val trigger = Trigger.ProcessingTime(s"${config.triggerIntervalSeconds} seconds")
     // ADR-0006: both queries in one driver locally; each has its own checkpoint and fails independently.
     val queries = Seq(new StatusProcessor(spark, config, log = log).start(trigger)) ++
       (if (config.bronzeEnabled) Seq(new BronzeWriter(spark, config).start(trigger)) else Nil)
 
+    val heartbeat = ProcessorMetrics.startHeartbeat(spark, java.time.Duration.ofSeconds(10))
     // Graceful stop (AC-7.6): SIGTERM (docker stop) or SIGINT (Ctrl-C) stops the queries between micro-batches and
     // exits 0. Without a handler the JVM exits 143/130 and in-flight batches are re-run on restart (still correct).
     val stopping = new java.util.concurrent.atomic.AtomicBoolean(false)
@@ -44,6 +49,8 @@ object StatusProcessorApp {
         true }
     queries.filter(_.isActive).foreach(_.stop())
     log.info("queries stopped", "graceful" -> !failed)
+    heartbeat.close()
+    metricsServer.close()
     spark.stop()
     if (failed) sys.exit(1)
   }

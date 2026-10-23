@@ -123,6 +123,7 @@ services:
       TRIGGER_INTERVAL_SECONDS: ${TRIGGER_INTERVAL_SECONDS:-5}
       MAX_OFFSETS_PER_TRIGGER: ${MAX_OFFSETS_PER_TRIGGER:-50000}
       DRIVER_MEMORY: 2g
+      METRICS_PORT: 9464   # scraped by Prometheus on the Compose network; not published on the host
     volumes:
       - ${PTP_HOST_DATA_DIR:?run make env}:${PTP_HOST_DATA_DIR:?run make env}
     stop_grace_period: 60s
@@ -196,7 +197,73 @@ services:
         limits:
           memory: 2g
 
+  # Observability (SC-0007): all bound to 127.0.0.1.
+  pushgateway:
+    profiles: ["obs"]
+    image: prom/pushgateway:v1.11.4@sha256:91a56b89b97dd8a5e1e4fa8b5bbbd86dd57a87a2a3cee3a3ce3368b40ef158ef
+    ports:
+      - "127.0.0.1:9091:9091"
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
+  prometheus:
+    profiles: ["obs"]
+    image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # scrape `make process` on the host
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  grafana:
+    profiles: ["obs"]
+    image: grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run make env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"     # no usage reporting
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      POSTGRES_DB: ${POSTGRES_DB:-ptp}
+      PTP_READER_PASSWORD: ${PTP_READER_PASSWORD:?run make env}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
 volumes:
   airflow-logs:
+  grafana-data:
+  prometheus-data:
   kafka-data:
   postgres-data:
