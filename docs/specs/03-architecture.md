@@ -1,5 +1,9 @@
 # 03 — Architecture
 
+> Two summaries of this spec exist for readers: the Mermaid diagram in the [README](../../README.md#architecture)
+> and the interactive map in [docs/architecture/index.html](../architecture/index.html) (with its screenshot
+> `docs/architecture/img/system-map.png`). When a component or connection here changes, update both in the same PR.
+
 ## Context
 
 ```

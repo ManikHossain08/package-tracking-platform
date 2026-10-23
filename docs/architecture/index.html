@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Package Tracking Platform</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column with a wide, scrollable system map; sections read top to bottom like a runbook. */
+:root {
+  color-scheme: light;
+  --paper: #f3f5f3;
+  --surface: #ffffff;
+  --ink: #17201c;
+  --muted: #59655f;
+  --line: #cdd5d0;
+  --band: #e8ece9;
+  --hot: #c46a06;      /* real-time path: hi-vis amber */
+  --cold: #2a62a6;     /* batch path */
+  --obs: #7353b0;      /* observability */
+  --rec: #0d8463;      /* recovery / replay */
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0f1412; --surface: #171f1b; --ink: #e5ebe7; --muted: #9ba8a1; --line: #2d3833; --band: #141b18;
+    --hot: #f2a33a; --cold: #73a9ee; --obs: #b39af0; --rec: #3cc79d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f1412; --surface: #171f1b; --ink: #e5ebe7; --muted: #9ba8a1; --line: #2d3833; --band: #141b18;
+  --hot: #f2a33a; --cold: #73a9ee; --obs: #b39af0; --rec: #3cc79d;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 17px/1.55 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 40px 72px; display: grid; gap: 56px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; text-wrap: balance; margin: 0; line-height: 1.05; }
+h1 { font-size: clamp(40px, 6vw, 64px); text-transform: uppercase; }
+h2 { font-size: 30px; text-transform: uppercase; }
+h3 { font-size: 21px; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--mono); font-size: 0.84em; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 18px; }
+
+header { display: grid; gap: 16px; }
+.lede { font-size: 19px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 26px; height: 0; border-top: 3px solid; display: inline-block; }
+.legend .l-hot { border-color: var(--hot); }
+.legend .l-cold { border-color: var(--cold); }
+.legend .l-obs { border-color: var(--obs); border-top-style: dotted; }
+.legend .l-rec { border-color: var(--rec); border-top-style: dashed; }
+
+/* Map */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button {
+  font: 600 14px/1 var(--body); padding: 9px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.filters button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.filters button:focus-visible, .node:focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
+.map-shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.map-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.map-scroll svg { display: block; width: 100%; min-width: 980px; height: auto; }
+.band { fill: var(--band); }
+.band-label { font: 700 13px var(--display); letter-spacing: 0.14em; text-transform: uppercase; fill: var(--muted); }
+.group { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.group-label { font: 500 11px var(--mono); fill: var(--muted); }
+.node { cursor: pointer; }
+.node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke .15s, opacity .15s; }
+.node .stripe { stroke: none; }
+.node.k-hot .stripe { fill: var(--hot); }
+.node.k-cold .stripe { fill: var(--cold); }
+.node.k-obs .stripe { fill: var(--obs); }
+.node.k-store .stripe { fill: var(--muted); }
+.node .t { font: 600 14px var(--body); fill: var(--ink); }
+.node .s { font: 400 10.5px var(--mono); fill: var(--muted); }
+.node:hover rect.box { stroke: var(--ink); }
+.node.sel rect.box { stroke: var(--ink); stroke-width: 2.5; }
+.edge path { fill: none; stroke-width: 2.2; transition: opacity .15s, stroke-width .15s; }
+.edge.k-hot path { stroke: var(--hot); }
+.edge.k-cold path { stroke: var(--cold); }
+.edge.k-obs path { stroke: var(--obs); stroke-dasharray: 2 4; stroke-width: 2; }
+.edge.k-rec path { stroke: var(--rec); stroke-dasharray: 7 5; }
+.edge text { font: 500 10.5px var(--mono); fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.mk-hot { fill: var(--hot); } .mk-cold { fill: var(--cold); } .mk-obs { fill: var(--obs); } .mk-rec { fill: var(--rec); }
+svg.focus .edge, svg.focus .node { opacity: 0.18; }
+svg.focus .edge.on, svg.focus .node.on { opacity: 1; }
+svg.focus .edge.on path { stroke-width: 3.2; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+.panel h3 { font-size: 24px; }
+.panel .role { font-size: 15.5px; }
+.panel dl { margin: 0; display: grid; gap: 10px; }
+.panel dt { font: 500 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.panel dd { margin: 4px 0 0; font-size: 14.5px; }
+.panel ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.panel .hint { font-size: 14px; color: var(--muted); }
+
+/* Journey */
+.journey { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
+.journey li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); counter-increment: step; align-items: baseline; }
+.journey li::before { content: counter(step, decimal-leading-zero); font: 700 26px/1 var(--display); color: var(--muted); }
+.journey li.hot::before { color: var(--hot); }
+.journey li.cold::before { color: var(--cold); }
+.journey li.obs::before { color: var(--obs); }
+.journey h3 { font-size: 20px; margin-bottom: 4px; }
+.journey p { font-size: 15.5px; color: var(--muted); }
+.when { font: 500 12px var(--mono); color: var(--muted); white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+
+/* Tables */
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 720px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 11px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); background: var(--band); }
+tr:last-child td { border-bottom: 0; }
+td strong { font-weight: 700; }
+.tag { display: inline-block; font: 500 11px var(--mono); padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.tag.hot { color: var(--hot); } .tag.cold { color: var(--cold); } .tag.rec { color: var(--rec); } .tag.obs { color: var(--obs); }
+
+/* Recovery cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.card p { font-size: 15.5px; color: var(--muted); }
+.card .mono { color: var(--ink); }
+
+footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+footer a { color: var(--ink); }
+
+@media (max-width: 1340px) {
+  .map-shell { grid-template-columns: minmax(0, 1fr); }
+  .panel { position: static; }
+}
+@media (max-width: 520px) {
+  .journey li { grid-template-columns: 40px minmax(0, 1fr); }
+  .journey .when { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architecture · local Docker Compose · Spark 4.1.3 · Kafka 4.3 · Postgres 17</div>
+  <h1>Package Tracking Platform</h1>
+  <p class="lede">Scan events flow from Kafka through Spark Structured Streaming. Spark keeps the current status of every package in Postgres and appends all raw history to Parquet. Hourly batch jobs turn that history into delivery and facility analytics, and every step reports to Prometheus.</p>
+  <div class="legend" aria-label="Line legend">
+    <span><i class="l-hot"></i>Real-time path (seconds)</span>
+    <span><i class="l-cold"></i>Batch path (hourly / daily)</span>
+    <span><i class="l-rec"></i>Recovery (replay from bronze)</span>
+    <span><i class="l-obs"></i>Metrics</span>
+  </div>
+</header>
+
+<section aria-labelledby="map-h">
+  <div class="eyebrow">System map</div>
+  <h2 id="map-h">How the components connect</h2>
+  <p>Click any box to see what it does, what feeds it (upstream) and what it feeds (downstream). Its connections stay lit. Use the buttons to trace one path at a time.</p>
+  <div class="filters" role="group" aria-label="Highlight a path">
+    <button type="button" id="f-all" data-f="all" aria-pressed="true">Everything</button>
+    <button type="button" id="f-hot" data-f="hot" aria-pressed="false">Real-time path</button>
+    <button type="button" id="f-cold" data-f="cold" aria-pressed="false">Batch path</button>
+    <button type="button" id="f-rec" data-f="rec" aria-pressed="false">Recovery</button>
+    <button type="button" id="f-obs" data-f="obs" aria-pressed="false">Metrics</button>
+  </div>
+  <div class="map-shell">
+    <div class="map-scroll">
+      <svg id="map" viewBox="0 0 1240 790" role="img" aria-label="System map: generator to Kafka to Spark streaming to Postgres, DLQ and bronze Parquet; Airflow batch jobs build silver, gold and data-quality results; Prometheus, Pushgateway and Grafana observe both.">
+        <defs>
+          <marker id="m-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-hot" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="m-cold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-cold" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="m-obs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-obs" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="m-rec" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-rec" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="band" x="10" y="14" width="1220" height="350" rx="8"/>
+        <text class="band-label" x="28" y="40">Real-time · streaming</text>
+        <rect class="band" x="10" y="384" width="1220" height="244" rx="8"/>
+        <text class="band-label" x="28" y="410">Batch · lake and analytics</text>
+        <rect class="band" x="10" y="648" width="1220" height="130" rx="8"/>
+        <text class="band-label" x="28" y="674">Observability</text>
+        <rect class="group" x="446" y="52" width="248" height="296" rx="10"/>
+        <text class="group-label" x="458" y="70">spark-processor · one driver JVM</text>
+        <text class="group-label" x="1022" y="40">Consumers</text>
+        <g id="edges"></g>
+        <g id="nodes"></g>
+      </svg>
+    </div>
+    <aside class="panel" id="panel" aria-live="polite">
+      <div class="eyebrow" id="p-kind">Select a component</div>
+      <h3 id="p-title">Start anywhere on the map</h3>
+      <p class="role" id="p-role">Each box is a running service, a store, or a job. Click Query A to see the heart of the real-time path, or Bronze Parquet to see where the batch path begins.</p>
+      <dl id="p-dl"></dl>
+    </aside>
+  </div>
+</section>
+
+<section aria-labelledby="journey-h">
+  <div class="eyebrow">Upstream to downstream</div>
+  <h2 id="journey-h">One scan event, end to end</h2>
+  <ol class="journey">
+    <li class="hot"><div><h3>A scanner emits an event</h3><p>The generator plays devices across the network: <code>CREATED</code>, <code>PICKED_UP</code>, <code>ARRIVED_AT_FACILITY</code>, <code>DELIVERED</code> and more. It injects duplicates, late and out-of-order events, and malformed payloads on purpose. It also records what the platform should end up with (the manifest).</p></div><span class="when">t = 0</span></li>
+    <li class="hot"><div><h3>Kafka stores it in order per package</h3><p>Topic <code>package-events.v1</code> uses the package ID as key, so all events for one package land in one of 6 partitions, in order. Kafka stamps the ingest time (LogAppendTime). The topic keeps 7 days, which is the window for restarting without data loss.</p></div><span class="when">ms</span></li>
+    <li class="hot"><div><h3>Spark reads it twice, in parallel</h3><p>One driver runs two streaming queries over the same topic, each with its own checkpoint. Query A maintains status. Query B archives every record. Neither waits for the other.</p></div><span class="when">each micro-batch</span></li>
+    <li class="hot"><div><h3>Query A validates and routes</h3><p><code>processor-core</code> checks the JSON against contract v1. Failures get one of 14 error codes, for example <code>INVALID_TIMESTAMP</code> or <code>UNKNOWN_EVENT_TYPE</code>, and go to the DLQ topic with the raw payload and source offset. Valid events are deduplicated by <code>event_id</code> within a 2-hour watermark.</p></div><span class="when">seconds</span></li>
+    <li class="hot"><div><h3>Postgres applies it, idempotently</h3><p>Per Spark partition, one transaction inserts event IDs into <code>tracking.processed_events</code>. Only IDs that are new count. It then upserts <code>tracking.package_status</code> with a preference guard: a terminal event beats a non-terminal one, and otherwise the later event wins. Replays and retries cannot double-count or move a status backwards.</p></div><span class="when">seconds</span></li>
+    <li class="hot"><div><h3>Query B appends it to bronze</h3><p>Every record, valid or not, is written to <code>lake/bronze/package_events</code> as Parquet, partitioned by <code>ingest_date</code>, with an <code>is_valid</code> flag. Bronze is never edited and is the source for every rebuild.</p></div><span class="when">seconds</span></li>
+    <li class="cold"><div><h3>Silver deduplicates and compacts</h3><p>Hourly, <code>lake_daily</code> runs the silver build. It reads only bronze offsets newer than its watermark and rebuilds just the affected <code>event_date</code> partitions in a staging directory, then swaps them in. It keeps the earliest copy of each event, adds typed columns and a content hash, and compacts to one file per date.</p></div><span class="when">hourly</span></li>
+    <li class="cold"><div><h3>Gold computes the KPIs</h3><p>Spark builds delivery facts and facility visits from silver, stages them in <code>ops.gold_stage_*</code>, then replaces the last 7 days of <code>analytics.*</code> in a single Postgres transaction. Readers never see a half-loaded window.</p></div><span class="when">hourly</span></li>
+    <li class="cold"><div><h3>Data quality checks the result</h3><p>The DQ job runs DQ-02 to DQ-10: duplicates in silver, orphan packages, post-terminal scans, DLQ records with no bronze row, and more. Results go to <code>ops.dq_results</code>. A critical or high failure exits 1, so the Airflow run fails visibly.</p></div><span class="when">hourly</span></li>
+    <li class="obs"><div><h3>People see it</h3><p>Status readers query <code>tracking.package_status</code>. Analysts run the query pack: on-time rate, delay percentiles, facility dwell, throughput and exception rate. Operators watch Grafana and the 8 Prometheus alert rules.</p></div><span class="when">any time</span></li>
+  </ol>
+</section>
+
+<section aria-labelledby="layers-h">
+  <div class="eyebrow">Medallion layers</div>
+  <h2 id="layers-h">Where each kind of data lives</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Layer</th><th>Where</th><th>Grain and shape</th><th>Written by</th><th>Read by</th><th>Retention</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Raw log</strong></td><td><code>package-events.v1</code></td><td>One message per emitted event, key = package ID</td><td>Generator</td><td>Query A, Query B</td><td>7 days</td></tr>
+        <tr><td><strong>Rejected</strong></td><td><code>package-events.dlq.v1</code></td><td>One record per invalid message: error code, field, raw payload, source offset</td><td>Query A</td><td>DQ-06, operators</td><td>14 days</td></tr>
+        <tr><td><strong>Bronze</strong></td><td><code>lake/bronze/package_events</code></td><td>Every consumed record, partitioned by <code>ingest_date</code>, with <code>is_valid</code></td><td>Query B</td><td>Silver build, replay</td><td>90 days</td></tr>
+        <tr><td><strong>Silver</strong></td><td><code>lake/silver/package_events</code></td><td>One row per unique valid event, partitioned by <code>event_date</code>, typed, with lineage</td><td>Silver build</td><td>Gold load, DQ job</td><td>400 days</td></tr>
+        <tr><td><strong>Current status</strong></td><td><code>tracking.package_status</code></td><td>One row per package: preferred status, event time, counts, shipment attributes</td><td>Query A, replay</td><td>Status readers, DQ</td><td>Indefinite</td></tr>
+        <tr><td><strong>Dedup ledger</strong></td><td><code>tracking.processed_events</code></td><td>One row per applied event ID, daily partitions</td><td>Query A, replay</td><td>Query A (dedup)</td><td>30 days</td></tr>
+        <tr><td><strong>Gold</strong></td><td><code>analytics.*</code></td><td><code>delivery_facts</code>, <code>facility_visits</code>, <code>daily_delivery_performance</code>, <code>daily_facility_performance</code>, <code>daily_network_activity</code></td><td>Gold load</td><td>Query pack, Grafana</td><td>Indefinite</td></tr>
+        <tr><td><strong>Run history</strong></td><td><code>ops.*</code></td><td><code>sink_batches</code>, <code>gold_runs</code>, <code>dq_results</code>, <code>replay_runs</code></td><td>All jobs</td><td>Grafana, operators</td><td>Indefinite</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="sem-h">
+  <div class="eyebrow">Delivery guarantees</div>
+  <h2 id="sem-h">What each hop promises</h2>
+  <p>No hop claims end-to-end exactly-once. Each sink states its own guarantee, and each guarantee has a test that proves it.</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Hop</th><th>Guarantee</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tag hot">stream</span> Generator → Kafka</td><td>At-least-once, no producer-session duplicates</td><td>Idempotent producer, <code>acks=all</code>; app-level resends reuse the same <code>event_id</code></td></tr>
+        <tr><td><span class="tag hot">stream</span> Kafka → Spark</td><td>At-least-once micro-batches</td><td>Offsets in the Spark checkpoint, committed after the sinks succeed</td></tr>
+        <tr><td><span class="tag hot">stream</span> Spark → status</td><td><strong>Effectively-once state</strong></td><td><code>processed_events</code> dedup plus the status preference guard, one transaction per partition</td></tr>
+        <tr><td><span class="tag hot">stream</span> Spark → DLQ</td><td>At-least-once</td><td>Consumers dedupe on source topic, partition and offset</td></tr>
+        <tr><td><span class="tag hot">stream</span> Spark → bronze</td><td>Exactly-once for readers of <code>_spark_metadata</code></td><td>File-sink commit log</td></tr>
+        <tr><td><span class="tag cold">batch</span> Bronze → silver → gold</td><td>Idempotent rebuild</td><td>Deterministic dedup, partition swap, transactional window replace</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="rec-h">
+  <div class="eyebrow">Failure and recovery</div>
+  <h2 id="rec-h">What happens when something breaks</h2>
+  <div class="cards">
+    <div class="card"><span class="tag hot">Processor restart</span><h3>Resume from the checkpoint</h3><p>Spark restarts at the last committed offsets and re-runs the open micro-batch. Events already applied are no-ops in <code>processed_events</code>. Nothing is lost while the outage is shorter than Kafka's 7 days.</p><p class="mono">make stream-down · make stream-up</p></div>
+    <div class="card"><span class="tag hot">Postgres down</span><h3>The batch fails, offsets wait</h3><p>The micro-batch fails without committing offsets. After Postgres returns, Spark retries the same batch, and the idempotent apply makes the retry safe.</p><p class="mono">Alert: PtpSinkFailures</p></div>
+    <div class="card"><span class="tag rec">Postgres data lost</span><h3>Replay from bronze</h3><p><code>replay_from_bronze</code> reads bronze for a date range and applies it with the same <code>processor-core</code> rules as the stream. As-ingested mode reproduces the live decisions. Backfill mode lifts the age limit.</p><p class="mono">make replay FROM=… · Airflow: replay_from_bronze</p></div>
+    <div class="card"><span class="tag cold">Bad lake data</span><h3>DQ stops the run</h3><p>A critical DQ failure, such as a duplicate in silver, makes <code>lake_daily</code> fail at the dq task and fires <code>PtpDqCriticalFailure</code>. Rebuilding silver for that range fixes it, because bronze is unchanged.</p><p class="mono">make silver INGEST_FROM=… INGEST_TO=…</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="dep-h">
+  <div class="eyebrow">Deployment</div>
+  <h2 id="dep-h">What runs where, locally</h2>
+  <p>Everything runs in Docker Compose on one machine and is grouped into profiles, so you start only what you need. Every UI binds to 127.0.0.1.</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Profile</th><th>Containers</th><th>Start with</th><th>Open</th></tr></thead>
+      <tbody>
+        <tr><td><strong>core</strong></td><td><code>kafka</code>, <code>kafka-init</code> (topics), <code>postgres</code>, <code>pg-migrate</code> (Flyway, roles, schema)</td><td><code>make up</code></td><td>Postgres :5432</td></tr>
+        <tr><td><strong>stream</strong></td><td><code>spark-processor</code> (Query A and Query B, <code>ptp-jobs</code> image)</td><td><code>make image</code>, <code>make stream-up</code></td><td>/metrics on the driver</td></tr>
+        <tr><td><strong>orchestration</strong></td><td><code>airflow</code> (standalone, LocalExecutor), <code>docker-proxy</code> (only container and image API calls)</td><td><code>make airflow-up</code></td><td>Airflow :8080</td></tr>
+        <tr><td><strong>obs</strong></td><td><code>prometheus</code>, <code>pushgateway</code>, <code>grafana</code></td><td><code>make obs-up</code></td><td>Grafana :3000, Prometheus :9090</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Source of this page: <code>docs/architecture/index.html</code> in <a href="https://github.com/ManikHossain08/package-tracking-platform">ManikHossain08/package-tracking-platform</a>. Based on docs/specs/03-architecture.md, ADR-0002 (semantics), ADR-0006 (sink topology), ADR-0009 (jobs image), spec 04 (retention, metrics) and sql/postgres/migrations V1–V7. Keep it in sync with the README diagram and spec 03.</footer>
+</div>
+
+<script>
+(function () {
+  // Node geometry and the facts shown in the side panel.
+  var N = {
+    gen:    { x: 30,  y: 150, w: 160, h: 78, k: "hot",  t: "Event generator", s: ["Python · faults", "writes a manifest"],
+      kind: "Source", role: "Plays scanners, vehicles and apps across the network: realistic package lifecycles plus deliberate duplicates, late, out-of-order and malformed events.",
+      up: ["Scenario files in bench/scenarios (rate, faults, size)"], down: ["Kafka package-events.v1 (idempotent producer, acks=all)", "Manifest and expected gold: the answer key for make reconcile and the tests"], code: "generator/ptp_generator" },
+    kafka:  { x: 236, y: 150, w: 176, h: 78, k: "hot",  t: "Kafka", s: ["package-events.v1", "6 partitions · 7 d"],
+      kind: "Event log", role: "Durable log, ordered per package (key = package_id). Kafka stamps ingest time (LogAppendTime), which bounds late-event decisions. Topic auto-creation is off.",
+      up: ["Event generator"], down: ["Query A · status-processor", "Query B · bronze-writer"], code: "infra/kafka/create-topics.sh" },
+    qa:     { x: 466, y: 84,  w: 208, h: 72, k: "hot",  t: "Query A · status", s: ["validate · dedupe · apply", "foreachBatch"],
+      kind: "Spark streaming query", role: "Validates every record with processor-core, drops duplicates within a 2 h watermark, sends invalid records to the DLQ, and applies valid ones to Postgres in one transaction per partition.",
+      up: ["Kafka package-events.v1"], down: ["Postgres tracking.* (current status)", "Kafka DLQ (invalid records)", "ops.sink_batches (batch bookkeeping)", "Prometheus via /metrics"], code: "processor/streaming · StatusProcessor, PostgresStatusSink" },
+    core:   { x: 466, y: 172, w: 208, h: 50, k: "store", t: "processor-core", s: ["shared rules, no Spark"],
+      kind: "Library", role: "Pure Scala rules used by the stream, replay and batch jobs: validation and error codes, the status preference order, content hash. Because replay uses the same rules, it makes the same decisions as the live stream.",
+      up: ["Contract: contracts/package-event.v1.schema.json"], down: ["Query A", "Replay", "Gold and DQ rules"], code: "processor/core" },
+    qb:     { x: 466, y: 238, w: 208, h: 72, k: "hot",  t: "Query B · bronze", s: ["append every record", "Parquet file sink"],
+      kind: "Spark streaming query", role: "Appends every consumed record, valid or not, to Parquet with an is_valid flag. Applies no business rules beyond flagging validity.",
+      up: ["Kafka package-events.v1"], down: ["Bronze Parquet"], code: "processor/streaming · BronzeWriter" },
+    pg:     { x: 760, y: 60,  w: 214, h: 86, k: "store", t: "Postgres · tracking", s: ["package_status", "processed_events · anomalies"],
+      kind: "Serving store", role: "Current status, one row per package. processed_events is the dedup ledger (daily partitions, 30 d). status_anomalies records post-terminal scans and semantic duplicates.",
+      up: ["Query A (live)", "Replay from bronze (repair)"], down: ["Status readers (ptp_reader)", "Data-quality job", "Grafana (read-only)"], code: "sql/postgres/migrations" },
+    dlq:    { x: 760, y: 168, w: 214, h: 62, k: "store", t: "Kafka DLQ", s: ["package-events.dlq.v1 · 14 d"],
+      kind: "Rejected records", role: "One record per invalid message: error code, failing field, raw payload and source offset. Kept 14 days only, because it holds raw payloads.",
+      up: ["Query A"], down: ["DQ-06 cross-check against bronze", "Operators investigating rejects"], code: "contracts/dlq-record.v1.schema.json" },
+    bronze: { x: 760, y: 252, w: 214, h: 80, k: "store", t: "Bronze Parquet", s: ["lake/bronze · ingest_date", "immutable · 90 d"],
+      kind: "Raw history", role: "Every record ever consumed, written through the file sink's commit log. Never edited; the source for silver and for replays.",
+      up: ["Query B"], down: ["Silver build (hourly)", "Replay from bronze (on demand)"], code: "data/lake/bronze/package_events" },
+    apps:   { x: 1020, y: 60, w: 196, h: 86, k: "store", t: "Status readers", s: ["ptp_reader role", "current status"],
+      kind: "Consumer", role: "Anything that needs a package's current status reads tracking.package_status as the read-only role ptp_reader.",
+      up: ["Postgres tracking.*"], down: [], code: "make status" },
+    airflow:{ x: 30,  y: 430, w: 160, h: 120, k: "cold", t: "Airflow", s: ["lake_daily · hourly", "replay · manual", "maintenance · daily"],
+      kind: "Orchestrator", role: "Schedules and retries work, with no business logic of its own. Each task starts the ptp-jobs image through a socket proxy that only allows container and image calls.",
+      up: ["Schedules and manual triggers"], down: ["ptp-jobs batch containers"], code: "orchestration/airflow/dags" },
+    jobs:   { x: 236, y: 430, w: 176, h: 120, k: "cold", t: "ptp-jobs container", s: ["Spark batch", "silver · gold · dq", "replay · maintenance"],
+      kind: "Batch runtime", role: "The same jar as the streaming processor, run as Spark batch jobs: LakeApp (silver, gold, dq, maintenance) and ReplayApp. You can run the same jobs by hand with make lake, make replay and make silver.",
+      up: ["Airflow (or make targets)"], down: ["Silver Parquet", "Data-quality job", "Postgres tracking.* via replay", "Pushgateway (run results)"], code: "infra/jobs · processor/streaming/lake" },
+    silver: { x: 466, y: 416, w: 208, h: 78, k: "cold", t: "Silver Parquet", s: ["lake/silver · event_date", "deduped · compacted · 400 d"],
+      kind: "Refined history", role: "One row per unique valid event, earliest copy kept, typed, with a content hash and lineage. Built incrementally from an offset watermark and swapped in from a staging directory.",
+      up: ["Bronze Parquet", "ptp-jobs (silver build)"], down: ["Gold load", "Data-quality job"], code: "SilverBuild.scala" },
+    dq:     { x: 466, y: 522, w: 208, h: 78, k: "cold", t: "Data-quality job", s: ["DQ-02 … DQ-10", "exit 1 on critical/high"],
+      kind: "Batch check", role: "Checks silver, gold, status and the DLQ: duplicates, orphan packages, post-terminal scans, DLQ records without a bronze row, and more. A critical or high failure fails the Airflow run.",
+      up: ["Silver Parquet", "Postgres tracking.* and analytics.*", "Kafka DLQ"], down: ["ops.dq_results", "tracking.status_anomalies", "Pushgateway (check results)"], code: "DqJob.scala · processor/core dq" },
+    gold:   { x: 760, y: 416, w: 214, h: 78, k: "store", t: "Postgres · analytics", s: ["delivery_facts", "facility_visits · daily_*"],
+      kind: "Gold", role: "Delivery and facility facts plus daily rollups. Spark stages the window in ops.gold_stage_*, then one transaction replaces the last 7 days.",
+      up: ["Silver Parquet via the gold load"], down: ["Analytics query pack", "Grafana", "Data-quality job"], code: "GoldLoad.scala" },
+    ops:    { x: 760, y: 522, w: 214, h: 78, k: "store", t: "Postgres · ops", s: ["sink_batches · gold_runs", "dq_results · replay_runs"],
+      kind: "Run history", role: "Bookkeeping for every pipeline run, so you can audit what ran, when, and with what result.",
+      up: ["Query A", "Gold load", "Data-quality job", "Replay"], down: ["Grafana (Lake & DQ dashboard)", "Operators"], code: "V3–V7 migrations" },
+    query:  { x: 1020, y: 416, w: 196, h: 78, k: "store", t: "Analytics query pack", s: ["on-time · delay p95", "dwell · throughput"],
+      kind: "Consumer", role: "Five KPI queries run as ptp_reader: on-time rate, delay percentiles, facility dwell, facility throughput and exception rate.",
+      up: ["Postgres analytics.*"], down: [], code: "sql/analytics · make query Q=01_on_time_rate" },
+    prom:   { x: 236, y: 682, w: 176, h: 72, k: "obs",  t: "Prometheus", s: ["scrapes /metrics", "8 tested alert rules"],
+      kind: "Metrics and alerts", role: "Scrapes the streaming driver and the Pushgateway. Evaluates 8 alert rules, all unit-tested with promtool: processor down, query stalled, driver unresponsive, lag growing, DLQ rate high, sink failures, DQ critical failure, lake stale.",
+      up: ["Spark driver /metrics", "Pushgateway"], down: ["Grafana", "Alerts page (no Alertmanager locally)"], code: "infra/observability" },
+    push:   { x: 466, y: 682, w: 208, h: 72, k: "obs",  t: "Pushgateway", s: ["results of batch runs"],
+      kind: "Metrics buffer", role: "Short-lived batch jobs push their last success time, duration, success flag, DQ failures and anomaly counts at the end of each run.",
+      up: ["ptp-jobs batch runs"], down: ["Prometheus"], code: "BatchMetrics.scala" },
+    grafana:{ x: 1020, y: 682, w: 196, h: 72, k: "obs",  t: "Grafana", s: ["Streaming dashboard", "Lake & Data Quality"],
+      kind: "Dashboards", role: "Two provisioned dashboards. Streaming shows throughput, lag, batch duration, rejects and heartbeat. Lake & Data Quality combines Prometheus with read-only Postgres run history.",
+      up: ["Prometheus", "Postgres ops.* and analytics.* (read-only)"], down: [], code: "infra/observability/grafana" }
+  };
+  // Edges: from, to, kind, path, optional label at [x, y].
+  var E = [
+    ["gen", "kafka", "hot", "M190,189 H236", "events", 213, 180],
+    ["kafka", "qa", "hot", "M412,176 H438 V120 H466"],
+    ["kafka", "qb", "hot", "M412,204 H438 V274 H466"],
+    ["qa", "pg", "hot", "M674,110 H760", "valid", 717, 102],
+    ["qa", "dlq", "hot", "M674,140 H722 V199 H760", "invalid", 728, 161],
+    ["qb", "bronze", "hot", "M674,286 H760"],
+    ["pg", "apps", "hot", "M974,98 H1020"],
+    ["bronze", "silver", "cold", "M820,332 V372 H570 V416", "new offsets only", 600, 365],
+    ["airflow", "jobs", "cold", "M190,490 H236"],
+    ["jobs", "silver", "cold", "M412,452 H466", "build", 439, 444],
+    ["jobs", "dq", "cold", "M412,528 H440 V561 H466"],
+    ["silver", "dq", "cold", "M570,494 V522"],
+    ["silver", "gold", "cold", "M674,450 H760", "replace", 717, 442],
+    ["dq", "ops", "cold", "M674,561 H760", "results", 717, 553],
+    ["gold", "query", "cold", "M974,455 H1020"],
+    ["bronze", "pg", "rec", "M974,302 H998 V128 H974", "replay", 1002, 220],
+    ["qa", "prom", "obs", "M466,146 H452 V350 H426 V700 H412", "/metrics", 432, 640],
+    ["jobs", "push", "obs", "M324,550 V614 H600 V682"],
+    ["push", "prom", "obs", "M466,736 H412"],
+    ["prom", "grafana", "obs", "M324,754 V770 H1118 V754"],
+    ["ops", "grafana", "obs", "M867,600 V718 H1020", "read-only", 875, 640]
+  ];
+
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("map");
+  var gE = document.getElementById("edges"), gN = document.getElementById("nodes");
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(svgNS, tag);
+    for (var a in attrs) e.setAttribute(a, attrs[a]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  var edgeEls = E.map(function (d) {
+    var g = el("g", { "class": "edge k-" + d[2], "data-from": d[0], "data-to": d[1] }, gE);
+    el("path", { d: d[3], "marker-end": "url(#m-" + d[2] + ")" }, g);
+    if (d[4]) { var t = el("text", { x: d[5], y: d[6], "text-anchor": {"events":1,"valid":1,"build":1,"replace":1,"results":1}[d[4]] ? "middle" : "start" }, g); t.textContent = d[4]; }
+    return g;
+  });
+
+  var nodeEls = {};
+  Object.keys(N).forEach(function (id) {
+    var n = N[id];
+    var g = el("g", { "class": "node k-" + n.k, tabindex: "0", role: "button", "aria-label": n.t + ": show details", "data-id": id }, gN);
+    el("rect", { "class": "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 7 }, g);
+    el("rect", { "class": "stripe", x: n.x, y: n.y + 8, width: 4, height: n.h - 16, rx: 2 }, g);
+    var t = el("text", { "class": "t", x: n.x + 14, y: n.y + 24 }, g); t.textContent = n.t;
+    n.s.forEach(function (line, i) {
+      var s = el("text", { "class": "s", x: n.x + 14, y: n.y + 42 + i * 15 }, g); s.textContent = line;
+    });
+    g.addEventListener("click", function () { select(id); });
+    g.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(id); } });
+    nodeEls[id] = g;
+  });
+
+  var panel = { kind: document.getElementById("p-kind"), title: document.getElementById("p-title"), role: document.getElementById("p-role"), dl: document.getElementById("p-dl") };
+  function list(items) {
+    if (!items.length) return "<dd>Nothing: this is an end consumer.</dd>";
+    return "<dd><ul>" + items.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul></dd>";
+  }
+  function clearFocus() {
+    svg.classList.remove("focus");
+    edgeEls.forEach(function (e) { e.classList.remove("on"); });
+    Object.keys(nodeEls).forEach(function (k) { nodeEls[k].classList.remove("on", "sel"); });
+  }
+  function setFilterButtons(f) {
+    document.querySelectorAll(".filters button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.f === f)); });
+  }
+  function select(id) {
+    clearFocus(); setFilterButtons("");
+    svg.classList.add("focus");
+    nodeEls[id].classList.add("on", "sel");
+    edgeEls.forEach(function (e) {
+      var f = e.getAttribute("data-from"), t = e.getAttribute("data-to");
+      if (f === id || t === id) { e.classList.add("on"); nodeEls[f].classList.add("on"); nodeEls[t].classList.add("on"); }
+    });
+    var n = N[id];
+    panel.kind.textContent = n.kind;
+    panel.title.textContent = n.t;
+    panel.role.textContent = n.role;
+    panel.dl.innerHTML = "<div><dt>Upstream · feeds it</dt>" + list(n.up) + "</div>" +
+      "<div><dt>Downstream · it feeds</dt>" + list(n.down) + "</div>" +
+      "<div><dt>In the repo</dt><dd><code>" + n.code + "</code></dd></div>";
+  }
+  function filter(f) {
+    clearFocus(); setFilterButtons(f);
+    if (f === "all") return;
+    svg.classList.add("focus");
+    edgeEls.forEach(function (e) {
+      if (e.classList.contains("k-" + f)) {
+        e.classList.add("on");
+        nodeEls[e.getAttribute("data-from")].classList.add("on");
+        nodeEls[e.getAttribute("data-to")].classList.add("on");
+      }
+    });
+  }
+  document.querySelectorAll(".filters button").forEach(function (b) {
+    b.addEventListener("click", function () { filter(b.dataset.f); });
+  });
+})();
+</script>
+</body>
+</html>
