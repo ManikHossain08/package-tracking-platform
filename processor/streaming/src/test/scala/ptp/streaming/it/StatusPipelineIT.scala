@@ -68,8 +68,8 @@ class StatusPipelineIT extends AnyFunSuite with BeforeAndAfterEach {
   private val T1 = T2.minus(Duration.ofHours(1))
 
   private def event(id: String, pkg: String, tpe: String, at: Instant): (String, Array[Byte]) =
-    pkg -> s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"$at",
-              |"emitted_at":"${Instant.now()}","source":{"system":"VEHICLE_APP","device_id":"vh-app-000123","sequence":1},
+    pkg -> s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"${iso(at)}",
+              |"emitted_at":"${iso(Instant.now())}","source":{"system":"VEHICLE_APP","device_id":"vh-app-000123","sequence":1},
               |"vehicle_id":"VH-000123"}""".stripMargin.replace("\n", "").getBytes(UTF_8)
 
   test("AC-1.3 an older event in a later batch never overwrites a newer state (both arrival orders)", Integration,
@@ -107,7 +107,7 @@ class StatusPipelineIT extends AnyFunSuite with BeforeAndAfterEach {
       "too-old" -> ("EVENT_TIME_TOO_OLD", Instant.now().minus(Duration.ofDays(30)).minusSeconds(60))
     )
     val inputs = expected.keys.toSeq.sorted.map(f => f -> java.nio.file.Files.readAllBytes(samples.resolve(f))) ++
-      runtime.toSeq.map { case (k, (_, at)) => k -> created.replace("2026-10-19T08:00:00.000Z", at.toString).getBytes(UTF_8) }
+      runtime.toSeq.map { case (k, (_, at)) => k -> created.replace("2026-10-19T08:00:00.000Z", iso(at)).getBytes(UTF_8) }
     produce(t.events, inputs)
     runToEnd(processor(t)._1)
 

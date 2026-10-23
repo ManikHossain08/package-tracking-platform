@@ -139,11 +139,15 @@ object ItInfra {
     }
   }
 
+  /** RFC 3339 text with at most 6 fractional digits, as the contract requires. `Instant.now()` has
+    * nanosecond precision on Linux JVMs, which the validator (correctly) rejects. */
+  def iso(at: Instant): String = at.truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString
+
   /** A minimal valid package event (JSON bytes keyed by package) for hand-planted test data. */
   def eventJson(pkg: String, tpe: String, at: java.time.Instant, id: String, extra: String = "",
                 system: String = "DC_SCANNER"): (String, Array[Byte]) =
-    pkg -> (s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"$at",""" +
-      s""""emitted_at":"${java.time.Instant.now()}","source":{"system":"$system","device_id":"device-it-01","sequence":1}$extra}""")
+    pkg -> (s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"${iso(at)}",""" +
+      s""""emitted_at":"${iso(Instant.now())}","source":{"system":"$system","device_id":"device-it-01","sequence":1}$extra}""")
       .getBytes("UTF-8")
 
   // ---- generator -------------------------------------------------------------------------------

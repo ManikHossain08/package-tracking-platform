@@ -20,6 +20,10 @@ floating versions (`latest`, `+`, unpinned pip requirements).
    wait for approval.
 5. Keep `docs/traceability.md` current: requirement → implementation → tests.
 
+## Git workflow (ADR-0010)
+- Never commit to `main`. Work on a `<type>/<name>` branch and open a PR; `main` changes only by merge commit after CI passes.
+- One step or change per PR; the PR description follows `.github/pull_request_template.md`.
+
 ## Testing rules
 - Tag every test with the requirement IDs it verifies
   (ScalaTest `Tag("FR-DED-01")`, pytest `@pytest.mark.req("FR-DED-01")`).
