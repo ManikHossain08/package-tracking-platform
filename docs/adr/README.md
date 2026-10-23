@@ -11,6 +11,7 @@
 | 0007 | JSON Schema in repo vs schema registry | Planned |
 | [0008](0008-airflow-orchestration.md) | Airflow for batch and recovery orchestration | Accepted |
 | [0009](0009-job-launch-from-airflow.md) | How Airflow launches Spark jobs | Accepted (option A) |
+| [0010](0010-branching-and-delivery.md) | Branching, merging and delivery | Accepted |
 
 Statuses: Proposed → Accepted → (Superseded by NNNN | Deprecated). Accepted ADRs are not
 edited; they are superseded by a new ADR. New ADRs use [template.md](template.md).

@@ -18,6 +18,7 @@ env: ## Create .env, or add keys it is missing; *_PASSWORD values are generated 
 	@scripts/ensure_env.sh
 
 up: env ## Start the core stack, create topics, roles and schema (AC-0.1)
+	@mkdir -p data/lake data/checkpoints data/airflow/auth && chmod -R a+rwX data  # containers run as non-root uids (Linux bind mounts)
 	$(COMPOSE) --profile core up -d --wait --wait-timeout 120 kafka postgres
 	$(COMPOSE) --profile core run --rm kafka-init
 	set -a; . ./.env; set +a; COMPOSE="$(COMPOSE)" infra/postgres/bootstrap-roles.sh
@@ -120,7 +121,7 @@ verify-processor: ## AC-7.6: containerised processor reconciles a run and stops 
 airflow-up: env ## Start Airflow + docker-proxy (profile orchestration); UI on http://127.0.0.1:8080 (admin, AIRFLOW_ADMIN_PASSWORD)
 	@mkdir -p data/airflow/auth && set -a && . ./.env && set +a && \
 	  python3 -c 'import json,os; print(json.dumps({"admin": os.environ["AIRFLOW_ADMIN_PASSWORD"]}))' > data/airflow/auth/passwords.json && \
-	  chmod 600 data/airflow/auth/passwords.json
+	  chmod 644 data/airflow/auth/passwords.json  # readable by the Airflow container's uid; local dev only
 	$(COMPOSE) --profile core --profile orchestration up -d --wait --wait-timeout 300 airflow
 
 airflow-down: ## Stop Airflow and the docker proxy

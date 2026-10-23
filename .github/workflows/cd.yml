@@ -1,0 +1,69 @@
+# CD (ADR-0010): publish the ptp-jobs image to GitHub Container Registry.
+#  - after CI succeeds on main  → ghcr.io/<owner>/ptp-jobs:sha-<commit> and :main
+#  - on a version tag vX.Y.Z    → also :X.Y.Z and :latest, plus a GitHub Release
+# Only commits that passed CI are published (workflow_run). No cloud account is needed.
+name: cd
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write   # GitHub Release on tags
+      packages: write   # push to GHCR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: sbt
+      - uses: sbt/setup-sbt@2d56c68508d12eef34cb068bac1c8e7f9523bbd9 # v1.5.12
+      - name: Build the jobs jar
+        run: make jar && mkdir -p infra/jobs/build && cp processor/streaming/target/scala-2.13/ptp-jobs.jar infra/jobs/build/
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ptp-jobs
+          tags: |
+            type=sha,format=long,prefix=sha-,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=main,enable=${{ github.event_name == 'workflow_run' }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: infra/jobs
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --title "${GITHUB_REF_NAME}"
