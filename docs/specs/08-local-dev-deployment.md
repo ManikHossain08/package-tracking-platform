@@ -22,7 +22,7 @@ No cloud account and no paid service are needed.
 | `core` | ✅ kafka, kafka-init, postgres, pg-migrate (Flyway) | Kafka 1 GB, Postgres 512 MB limits |
 | `stream` | ✅ spark-processor (`ptp-jobs` image; status processor + bronze writer); alternatively `make process` on the host | 3 GB limit (driver 2 GB) | Limits: Kafka 1 GB (≈410 MiB measured idle), Postgres 512 MB (≈22 MiB idle); Spark driver 2–3 GB planned |
 | `obs` | prometheus, grafana | ~0.5 GB |
-| `orchestration` | airflow (LocalExecutor) | ~2 GB |
+| `orchestration` | ✅ airflow (`standalone`, LocalExecutor, metadata DB `airflow`), docker-proxy | Airflow 2 GB limit, proxy 64 MB; job containers 2 GB each |
 
 ## Make targets
 
@@ -39,7 +39,8 @@ No cloud account and no paid service are needed.
 | `make secrets-scan` | gitleaks over the git history (pinned image) | ✅ |
 | `make lock` | Re-lock Python deps with hashes (`uv`, `--exclude-newer`) | ✅ |
 | `make ci` | `check-pins` + `lint` + `test` | ✅ |
-| `make up-all` | Start all profiles | *(planned)* |
+| `make airflow-up` / `make airflow-down` | Airflow + docker-proxy; UI http://127.0.0.1:8080 (user `admin`, `AIRFLOW_ADMIN_PASSWORD`). DAGs start paused. | ✅ |
+| `make verify-airflow` | AC-7.7…7.11 end to end (needs `make up`, `make image` and data in bronze) | ✅ |
 | `make generate [SCENARIO=…] [SINK=kafka\|file]` | Run the generator; outputs go to `data/generator/<scenario>/` | ✅ |
 | `make test-it-py` | Python integration tests against the running stack | ✅ |
 | `make process` | Run the status processor and the bronze writer on the host (`local[*]`) against the core stack | ✅ |
@@ -77,6 +78,9 @@ No cloud account and no paid service are needed.
 | `PTP_STREAM_WRITER_PASSWORD` etc. | *(no default; required)* | Secrets: set in `.env` only |
 | `LAKE_ROOT` | `data/lake` (made absolute by `make`) | ✅ |
 | `BRONZE_ENABLED` | `true` | ✅ |
+| `PTP_HOST_DATA_DIR` | absolute path of `./data` (filled in by `make env`) | ✅ containers mount `./data` at this same path: the bronze sink log stores absolute paths |
+| `PTP_AIRFLOW_PASSWORD`, `AIRFLOW_ADMIN_PASSWORD` | *(generated)* | ✅ secrets |
+| `BRONZE_RETENTION_DAYS` / `SILVER_RETENTION_DAYS` / `PROCESSED_EVENTS_RETENTION_DAYS` | `90` / `400` / `30` | ✅ |
 | `SILVER_TARGET_FILE_BYTES` | `134217728` (128 MiB) | ✅ |
 | `CHECKPOINT_ROOT` | `/data/checkpoints` | |
 | `TRIGGER_INTERVAL_SECONDS` | `5` | ✅ |

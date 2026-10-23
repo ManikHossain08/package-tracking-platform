@@ -9,6 +9,7 @@ while IFS= read -r line; do
   key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
   grep -q "^${key}=" .env && continue
   [[ "$key" == *_PASSWORD ]] && value="$(openssl rand -hex 24)"
+  [[ "$key" == PTP_HOST_DATA_DIR ]] && value="$PWD/data"
   printf '%s=%s\n' "$key" "$value" >> .env
   added=$((added + 1))
 done < .env.example

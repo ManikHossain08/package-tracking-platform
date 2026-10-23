@@ -177,7 +177,7 @@ object DqJob {
     val closedTo = Seq(dq.asOf, LocalDate.ofInstant(dq.now, ZoneOffset.UTC).minusDays(1)).min
     if (closedTo.isBefore(windowFrom))
       return CheckResult("DQ-06", "critical", "skipped", None, "closed ingest dates exist", Nil, "no closed ingest date in the window yet")
-    val bronze = spark.read.parquet(lake.bronzePath).as[BronzeRow]
+    val bronze = BronzeRow.read(spark, lake.bronzePath).as[BronzeRow]
       .filter(r => !r.ingest_date.isBefore(windowFrom) && !r.ingest_date.isAfter(closedTo) && r.kafka_topic == dq.eventsTopic).cache()
     val dupOffsets = bronze.groupBy("kafka_partition", "kafka_offset").count().where(col("count") > 1).count()
     val invalid    = bronze.filter(!_.is_valid).map(r => (r.kafka_partition, r.kafka_offset)).collect().toSet

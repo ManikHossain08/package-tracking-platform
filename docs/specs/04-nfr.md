@@ -31,7 +31,7 @@
 | `package-events.v1` | 7 days | Kafka `retention.ms` |
 | `package-events.dlq.v1` | 14 days | Kafka `retention.ms` (contains raw payloads, so it is limited) |
 | `tracking.processed_events` | 30 days (must be > Kafka retention) | Drop daily partitions |
-| Bronze Parquet | 90 days | Maintenance DAG deletes `ingest_date` partitions **and** compacts the file-sink metadata log accordingly |
+| Bronze Parquet | 90 days | Maintenance DAG deletes `ingest_date` partitions; the file sink's `retention` option drops their log entries at compaction, and `BronzeRow.read` (explicit schema + `ignoreMissingFiles`) tolerates the gap (SC-0006 C, verified by TS-O-03) |
 | Silver Parquet | 400 days | Maintenance DAG |
 | Gold / `package_status` | Indefinite (small) | — |
 | Spark checkpoints | Spark-managed (`minBatchesToRetain`) | — |

@@ -2,7 +2,7 @@
 
 > Maintained by hand until `scripts/check_traceability.py` (FR-DEV-03) exists, which will
 > generate this file from requirement tags in tests. Implementation and test columns are
-> empty until the step that implements them. Steps 1–6 and 7a are done (4 = first vertical slice; 5 = bronze + replay; 6 = silver + gold; 7a = DQ job + jobs image).
+> empty until the step that implements them. Steps 1–7 are done (4 = first vertical slice; 5 = bronze + replay; 6 = silver + gold; 7 = DQ job, jobs image, Airflow).
 
 | Requirement | Pri | Spec | ADR | Implementation | Planned tests | Status |
 |---|---|---|---|---|---|---|
@@ -27,13 +27,13 @@
 | FR-ANL-01 | P1 | 01, 02 §4 | 0005, SC-0005 B/C | `ptp/lake/GoldLoad.scala`, `core/gold/GoldRules.scala`, migration V5 | TS-D-03 ✅ (AC-6.6–6.9), GoldRulesSpec ✅, live run ✅ | ✅ Verified |
 | FR-ANL-02 | P1 | 01 | SC-0005 B | `sql/analytics/01–05*.sql`, `make query` | TS-D-05 ✅ (AC-6.10, as `ptp_reader`) | ✅ Verified |
 | FR-REC-01 | P0 | 01, 06 | 0002 | checkpoint per query; idempotent sink | TS-R-01 ✅ (crash after sink commit, re-run batch 3, attempts = 2); TS-R-05 pending | ✅ Verified (TS-R-05 pending) |
-| FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅ | ✅ Verified |
+| FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅, `replay_from_bronze` DAG ✅ (TS-O-02) | ✅ Verified |
 | FR-REC-03 | P1 | 01, 06 | 0002 | — | TS-R-02 | Specified |
 | FR-REC-04 | P2 | 01, 06 | — | — | TS-R-07 | Specified |
 | FR-OBS-01 | P1 | 01, 04 | — | — | metric contract test | Specified |
 | FR-OBS-02 | P0 | 01, 06 | — | `StructuredLog.scala`, `ptp.events` logger | TS-U-08 ✅, AC-1.8 in TS-R-01 ✅ | ✅ Verified |
 | FR-OBS-03 | P2 | 01 | — | — | — | Specified |
-| FR-DEV-01 | P0 | 01, 08 | 0001, 0009 | `Makefile`, `infra/`, `processor/build.sbt`, `infra/jobs/` (ptp-jobs image) | `SparkRuntimeSmokeSpec` ✅, `make verify` ✅, `make verify-processor` ✅ (AC-7.6: reconcile + graceful stop, exit 0) | ✅ Verified (core + stream profiles; Airflow in 7b) |
+| FR-DEV-01 | P0 | 01, 08 | 0001, 0009 | `Makefile`, `infra/`, `processor/build.sbt`, `infra/jobs/` (ptp-jobs image) | `SparkRuntimeSmokeSpec` ✅, `make verify` ✅, `make verify-processor` ✅ (AC-7.6: reconcile + graceful stop, exit 0) | ✅ Verified (core, stream, orchestration profiles) |
 | FR-DEV-02 | P0 | 01 | — | `.github/workflows/ci.yml` (checks, scala, integration, stack jobs) | CI run pending: no GitHub remote yet | Implemented, not yet run |
 | FR-DEV-03 | P1 | 01 | — | — | CI | Specified |
 | NFR-01 | — | 04 | 0002 | `StatusRule` + SQL mirror | TS-U-05 ✅ (Scala property + SQL property); TS-R-04 pending | ✅ Verified (replay pending) |
@@ -43,8 +43,9 @@
 | NFR-05 | — | 04 | 0005 | — | TS-P-02 | Specified |
 | NFR-06 | — | 04, 06 | — | `.env.example`, `make env`, `.gitleaks.toml` | `make secrets-scan` ✅ | ✅ Verified |
 | NFR-07 | — | 04 | 0001 | digests in compose, `build.sbt` vals, hashed `requirements-dev.txt`, SHA-pinned actions | `make check-pins` ✅ | ✅ Verified |
-| NFR-08 | — | 04 | — | — | maintenance DAG test | Specified |
+| NFR-08 | — | 04 | SC-0006 C | `ptp/lake/Retention.scala`, V6 `drop_processed_events_partitions_before`, bronze sink `retention` + `BronzeRow.read`, `maintenance` DAG | TS-O-03 ✅ (RetentionIT: expiry + log-referenced deletion), maintenance DAG run ✅ | ✅ Verified |
 | NFR-09 | — | 04, 06 | — | — | TS-U-08 | Specified |
 | NFR-10 | — | 04, 09 | — | — | TS-P-01 | Specified |
 | NFR-11 | — | 04, 08 | — | — | config test | Specified |
 | DQ-01..10 | — | 05 | SC-0006 | `ptp/lake/DqJob.scala`, `core/dq/DqRules.scala`, migration V6 (`ops.dq_results`, `tracking.status_anomalies`) | TS-D-06 ✅ (clean data passes, anomalies = oracle, idempotent), TS-D-07 ✅ (each of DQ-02…09 catches a planted fault; exit codes), DqRulesSpec ✅ (DQ-10 logic); scheduling via Airflow in 7b | ✅ Verified (DQ-10 only by unit test: needs 7 days of history) |
+| ADR-0008/0009 orchestration | — | 03, 08 | 0008, 0009 | `orchestration/airflow/dags/`, `infra/docker-compose.yml` (airflow, docker-proxy) | TS-O-01 ✅ (check_dags.py, 43 checks), TS-O-02 ✅ (verify_airflow.sh: lake_daily success + planted-fault failure at dq, replay valid/invalid, maintenance) | ✅ Verified |

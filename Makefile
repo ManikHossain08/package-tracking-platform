@@ -9,7 +9,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Pins Python deps to what was published before this date (reproducible re-locks).
 LOCK_EXCLUDE_NEWER := 2026-10-07
 
-.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query jar image spark-jars stream-up stream-down verify-processor status reconcile check-pins secrets-scan ci
+.PHONY: help env up down reset ps logs verify venv lock lint test test-py test-scala test-it test-it-py generate fixtures process replay silver gold lake query jar image spark-jars stream-up stream-down verify-processor airflow-up airflow-down verify-airflow status reconcile check-pins secrets-scan ci
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -50,8 +50,8 @@ lock: ## Re-lock Python dev dependencies (needs uv)
 	  --exclude-newer $(LOCK_EXCLUDE_NEWER) -o requirements-dev.txt
 
 lint: venv ## Lint and format-check Python code
-	$(PY) -m ruff check scripts tests generator
-	$(PY) -m ruff format --check scripts tests generator
+	$(PY) -m ruff check scripts tests generator orchestration
+	$(PY) -m ruff format --check scripts tests generator orchestration
 
 test-py: venv ## Python unit and contract tests
 	$(PY) -m pytest
@@ -116,6 +116,18 @@ stream-down: ## Stop the spark-processor container gracefully (SIGTERM → queri
 
 verify-processor: ## AC-7.6: containerised processor reconciles a run and stops cleanly (needs make up + image)
 	COMPOSE="$(COMPOSE)" scripts/verify_processor.sh
+
+airflow-up: env ## Start Airflow + docker-proxy (profile orchestration); UI on http://127.0.0.1:8080 (admin, AIRFLOW_ADMIN_PASSWORD)
+	@mkdir -p data/airflow/auth && set -a && . ./.env && set +a && \
+	  python3 -c 'import json,os; print(json.dumps({"admin": os.environ["AIRFLOW_ADMIN_PASSWORD"]}))' > data/airflow/auth/passwords.json && \
+	  chmod 600 data/airflow/auth/passwords.json
+	$(COMPOSE) --profile core --profile orchestration up -d --wait --wait-timeout 300 airflow
+
+airflow-down: ## Stop Airflow and the docker proxy
+	$(COMPOSE) --profile core --profile orchestration stop airflow docker-proxy
+
+verify-airflow: ## AC-7.7..7.10: Airflow health, auth, DB isolation, DAG integrity, end-to-end DAG runs (needs image + data)
+	COMPOSE="$(COMPOSE)" scripts/verify_airflow.sh
 
 LAKE_RUN = set -a; . ./.env; set +a; export LAKE_ROOT="$(CURDIR)/$${LAKE_ROOT:-data/lake}"; cd processor && \
   sbt -batch "streaming/runMain ptp.lake.LakeApp

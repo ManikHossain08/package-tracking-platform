@@ -181,6 +181,9 @@ ordering, restart-safe. Bronze, silver, gold, Airflow and Grafana are **out of s
 | TS-D-05 | SQL query pack on a hand-computed fixture, as `ptp_reader` (AC-6.10) | FR-ANL-02 | P1 |
 | TS-D-06 | DQ job on clean data: one result per check, all pass/warn, DQ-10 skipped, anomalies = oracle, idempotent (AC-7.1/7.2/7.5) | DQ-02…10 | P1 |
 | TS-D-07 | DQ fault sequence: each check catches its planted fault, others unchanged; exit codes (AC-7.3/7.4) | DQ-02…09 | P1 |
+| TS-O-01 | DAG integrity inside Airflow: imports, task graph, retries, timeouts, run-scoped commands, secrets kept out of templated env (AC-7.8) | FR-DEV-01 | P1 |
+| TS-O-02 | `make verify-airflow`: health/auth/DB isolation, lake_daily end to end and with a planted fault, replay valid/invalid, maintenance (AC-7.7–7.11) | FR-ANL-01, FR-REC-02, NFR-08 | P1 |
+| TS-O-03 | Retention: expiry in all three stores; deleting a log-referenced bronze partition keeps bronze readable and writable (AC-7.11) | NFR-08 | P1 |
 | TS-I-07 | Containerised processor: reconcile a run, graceful stop with exit 0 (`make verify-processor`, AC-7.6) | FR-DEV-01 | P1 |
 | TS-P-01 | Throughput/latency benchmark per spec 09 | NFR-10 | P1 |
 | TS-P-02 | 30-min soak at constant rate: heap and state rows plateau | NFR-05 | P1 |

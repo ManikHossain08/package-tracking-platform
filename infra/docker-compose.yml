@@ -118,13 +118,13 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ptp}
       PTP_STREAM_WRITER_PASSWORD: ${PTP_STREAM_WRITER_PASSWORD:?run make env}
-      LAKE_ROOT: /data/lake
-      CHECKPOINT_ROOT: /data/checkpoints
+      LAKE_ROOT: ${PTP_HOST_DATA_DIR:?run make env}/lake          # same absolute path as on the host (see .env.example)
+      CHECKPOINT_ROOT: ${PTP_HOST_DATA_DIR:?run make env}/checkpoints
       TRIGGER_INTERVAL_SECONDS: ${TRIGGER_INTERVAL_SECONDS:-5}
       MAX_OFFSETS_PER_TRIGGER: ${MAX_OFFSETS_PER_TRIGGER:-50000}
       DRIVER_MEMORY: 2g
     volumes:
-      - ../data:/data
+      - ${PTP_HOST_DATA_DIR:?run make env}:${PTP_HOST_DATA_DIR:?run make env}
     stop_grace_period: 60s
     restart: "no"
     deploy:
@@ -132,6 +132,71 @@ services:
         limits:
           memory: 3g
 
+  # Docker API for Airflow's DockerOperator, restricted (ADR-0009). Never published on a host port.
+  docker-proxy:
+    profiles: ["orchestration"]
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    environment:
+      CONTAINERS: 1   # create/start/wait/logs/remove job containers
+      IMAGES: 1       # DockerOperator checks that the image exists before starting it
+      POST: 1         # write methods, for the sections enabled above only
+      # Everything else (exec, volumes, networks, swarm, system, …) stays denied by the proxy's defaults.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
+  # Airflow 3 (ADR-0008): one container (`standalone`, LocalExecutor), metadata in its own Postgres database.
+  airflow:
+    profiles: ["orchestration"]
+    image: apache/airflow:3.3.2-python3.12@sha256:9df9c8be4096b9cc626bd7cb1f2b8c712eef66c59c615f8c7e6200871ca10bd1
+    command: ["standalone"]
+    user: "50000:0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_started
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://ptp_airflow:${PTP_AIRFLOW_PASSWORD:?run make env}@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"   # schedules start only when a DAG is unpaused
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/auth/passwords.json
+      # Read by the DAGs (orchestration/airflow/dags/ptp_common.py).
+      PTP_JOBS_IMAGE: ptp-jobs:local
+      PTP_DOCKER_URL: tcp://docker-proxy:2375
+      PTP_DOCKER_NETWORK: ptp_default
+      PTP_HOST_DATA_DIR: ${PTP_HOST_DATA_DIR:?run make env}   # absolute path of ./data (from .env)
+      POSTGRES_DB: ${POSTGRES_DB:-ptp}
+      PTP_BATCH_WRITER_PASSWORD: ${PTP_BATCH_WRITER_PASSWORD:?run make env}
+      PTP_STREAM_WRITER_PASSWORD: ${PTP_STREAM_WRITER_PASSWORD:?run make env}
+      BRONZE_RETENTION_DAYS: ${BRONZE_RETENTION_DAYS:-90}
+      SILVER_RETENTION_DAYS: ${SILVER_RETENTION_DAYS:-400}
+      PROCESSED_EVENTS_RETENTION_DAYS: ${PROCESSED_EVENTS_RETENTION_DAYS:-30}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../orchestration/airflow/dags:/opt/airflow/dags:ro
+      - ../orchestration/airflow/checks:/opt/airflow/checks:ro
+      - ../data/airflow/auth:/opt/airflow/auth
+      - airflow-logs:/opt/airflow/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/monitor/health >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
 volumes:
+  airflow-logs:
   kafka-data:
   postgres-data:

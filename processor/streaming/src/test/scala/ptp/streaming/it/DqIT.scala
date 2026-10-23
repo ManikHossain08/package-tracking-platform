@@ -95,6 +95,10 @@ class DqIT extends AnyFunSuite with BeforeAndAfterEach {
     Files.copy(file, copy, StandardCopyOption.REPLACE_EXISTING)
     val dupIds = spark.read.parquet(copy.toString).select("event_id").collect().map(_.getString(0)).toSet
     expect(Map("DQ-02" -> "fail", "DQ-07" -> "fail"), exit = 1, "DQ-02" -> dupIds)
+    // Regression (7b): gold must survive the duplicated silver rows so the DAG reaches the dq task.
+    val goldBefore = rowsOf("SELECT count(*) AS n, sum(delivered_count) AS d FROM analytics.daily_delivery_performance")
+    GoldLoad.run(spark, lc, Today)
+    assert(rowsOf("SELECT count(*) AS n, sum(delivered_count) AS d FROM analytics.daily_delivery_performance") == goldBefore)
     Files.delete(copy)
 
     // DQ-07: a tampered status row.

@@ -51,8 +51,7 @@ object Replay {
     log.info("replay starting", "run_id" -> runId, "from" -> request.from.toString, "to" -> request.to.toString,
       "mode" -> request.mode.name, "dry_run" -> request.dryRun, "path" -> path)
     try {
-      val records = spark.read
-        .parquet(path) // the file sink's root: Spark reads only committed files (_spark_metadata)
+      val records = BronzeRow.read(spark, path) // committed files only (_spark_metadata); retention-tolerant
         .where(col("ingest_date").between(request.from.toString, request.to.toString))
         .select(col("kafka_key").as("key"), col("raw_value").as("value"), col("kafka_topic").as("topic"),
           col("kafka_partition").as("partition"), col("kafka_offset").as("offset"), col("kafka_timestamp").as("timestamp"))

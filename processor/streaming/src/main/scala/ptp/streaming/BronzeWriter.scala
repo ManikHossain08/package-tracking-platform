@@ -29,6 +29,16 @@ final case class BronzeRow(
 )
 
 object BronzeRow {
+
+  /** The bronze schema, from the writer's own type (never inferred from footers). */
+  lazy val schema: org.apache.spark.sql.types.StructType = org.apache.spark.sql.Encoders.product[BronzeRow].schema
+
+  /** Reads bronze through the sink's `_spark_metadata` with an explicit schema and `ignoreMissingFiles`: files removed
+    * by retention, but still listed in the log until it compacts, are skipped instead of failing the read (SC-0006 C).
+    * The explicit schema matters: footer-based schema inference does not honour `ignoreMissingFiles`.
+    */
+  def read(spark: SparkSession, path: String): org.apache.spark.sql.DataFrame =
+    spark.read.schema(schema).option("ignoreMissingFiles", "true").parquet(path)
   def fromRecords(validation: ValidationConfig, mode: ProcessingMode, version: String)(records: Iterator[KafkaRecord]): Iterator[BronzeRow] = {
     val validator = new EventValidator(validation)
     records.map { r =>
@@ -72,6 +82,7 @@ final class BronzeWriter(spark: SparkSession, config: ProcessorConfig, log: Stru
       .queryName(queryName)
       .format("parquet")
       .option("path", config.bronzePath)
+      .option("retention", s"${config.bronzeRetentionDays}d") // expired entries leave _spark_metadata at compaction (NFR-08)
       .option("checkpointLocation", s"${config.checkpointRoot}/$queryName")
       .partitionBy("ingest_date")
       .trigger(trigger)

@@ -190,6 +190,7 @@ object ItInfra {
     checkpointRoot = Files.createTempDirectory("ptp-it-ckpt-").toString,
     lakeRoot = Files.createTempDirectory("ptp-it-lake-").toString,
     bronzeEnabled = true,
+    bronzeRetentionDays = 90,
     queryName = "status-processor",
     triggerIntervalSeconds = 1,
     maxOffsetsPerTrigger = maxOffsetsPerTrigger,

@@ -57,6 +57,9 @@ object GoldLoad {
         col("origin_facility_id").as("originFacilityId"), col("destination_postal_prefix").as("destinationPostalPrefix"),
         col("destination_timezone").as("destinationTimezone")
       ).as[ApplyEvent]
+        // Defensive: silver promises unique event_ids (DQ-02). If that is ever broken, gold must not crash on it;
+        // the DQ task then fails the run with a precise diagnosis instead.
+        .dropDuplicates("eventId")
       val byPackage = events.groupByKey(_.packageId)
       val facts  = byPackage.flatMapGroups((_, es) => GoldRules.deliveryFact(es.toSeq))
         .filter(f => !f.deliveryDate.isBefore(windowFrom) && !f.deliveryDate.isAfter(asOf)).cache()
@@ -192,7 +195,7 @@ object LakeApp {
     val opts = args.drop(1).sliding(2, 2).collect { case Array(k, v) if k.startsWith("--") => k.drop(2) -> v }.toMap
     def fail(msg: String): Nothing = {
       log.error("invalid arguments", "error_code" -> "LAKE_ARGS_INVALID", "error" -> msg,
-        "action" -> "Usage: silver [--from yyyy-MM-dd --to yyyy-MM-dd] | gold [--as-of yyyy-MM-dd] | dq [--as-of …] | all [--as-of …]")
+        "action" -> "Usage: silver [--from yyyy-MM-dd --to yyyy-MM-dd] | gold [--as-of yyyy-MM-dd] | dq [--as-of …] | all [--as-of …] | maintenance [--as-of …]")
       sys.exit(2)
     }
     def date(k: String): Option[LocalDate] = opts.get(k).map(v => scala.util.Try(LocalDate.parse(v)).getOrElse(fail(s"--$k must be yyyy-MM-dd")))
@@ -209,7 +212,11 @@ object LakeApp {
         case Some("gold")   => GoldLoad.run(spark, config, asOf); 0
         case Some("dq")     => dq()
         case Some("all")    => SilverBuild.run(spark, config); GoldLoad.run(spark, config, asOf); dq()
-        case _              => fail("first argument must be silver, gold, dq or all")
+        case Some("maintenance") =>
+          def days(k: String, d: Int) = sys.env.get(k).flatMap(_.toIntOption).filter(_ > 0).getOrElse(d)
+          Retention.run(spark, config, asOf, RetentionConfig(days("BRONZE_RETENTION_DAYS", 90),
+            days("SILVER_RETENTION_DAYS", 400), days("PROCESSED_EVENTS_RETENTION_DAYS", 30))); 0
+        case _              => fail("first argument must be silver, gold, dq, all or maintenance")
       } finally spark.stop()
     sys.exit(exit) // AC-7.4: a critical/high DQ failure fails the caller (make, Airflow)
   }

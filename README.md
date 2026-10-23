@@ -22,6 +22,7 @@ make reconcile # compare Postgres with the generator's manifest
 make replay FROM=2026-10-22   # rebuild/repair Postgres from bronze Parquet (idempotent)
 make lake      # silver (deduped, compacted Parquet) + gold analytics + data-quality checks
 make image && make stream-up   # run the streaming processor as a container instead of make process
+make airflow-up                # Airflow on http://127.0.0.1:8080: lake_daily, replay_from_bronze, maintenance
 make query Q=01_on_time_rate FROM=2026-10-16 TO=2026-10-22   # KPI queries (sql/analytics/)
 make status    # status distribution and batch totals
 make test-it   # integration tests (Docker): Kafka + Postgres + Spark + generator
@@ -49,7 +50,7 @@ make down      # stop (volumes kept)
 2. Specifications ✅
 3. Architecture and ADRs ✅ (0001–0006 accepted; 0007–0008 planned)
 4. Schemas and acceptance tests
-5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅, step 3 (validation) ✅, step 4 (status pipeline, first slice) ✅, step 5 (bronze + replay) ✅, step 6 (silver + gold analytics) ✅, step 7a (data-quality job + jobs image) ✅
+5. Incremental implementation, one vertical slice at a time — step 1 (setup) ✅, step 2 (generator) ✅, step 3 (validation) ✅, step 4 (status pipeline, first slice) ✅, step 5 (bronze + replay) ✅, step 6 (silver + gold analytics) ✅, step 7 (data quality, jobs image, Airflow orchestration) ✅
 6. Test runs with actual results
 7. Security, reliability and performance review
 8. Documentation and portfolio demo

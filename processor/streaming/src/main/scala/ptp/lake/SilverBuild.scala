@@ -78,7 +78,7 @@ object SilverBuild {
       log.info("no bronze data yet", "run_id" -> runId, "path" -> config.bronzePath)
       return SilverResult(runId, Nil, 0, Map.empty)
     }
-    val bronze    = spark.read.parquet(config.bronzePath).as[BronzeRow] // honours _spark_metadata
+    val bronze    = BronzeRow.read(spark, config.bronzePath).as[BronzeRow] // honours _spark_metadata
     val watermark = readWatermark(fs, state)
     val selected = ingestRange match {
       case Some((from, to)) => bronze.filter($"ingest_date".between(from.toString, to.toString))

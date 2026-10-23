@@ -22,6 +22,15 @@ a way to start it. The step 4 gap (no container image, unclean shutdown) is clos
 exec and swarm, is denied. Jobs run with explicit memory limits, on the Compose network, with the lake
 mounted. Production mapping: KubernetesPodOperator, Dataproc or EMR operators; no Docker API at all.
 
+**Implementation note (7b, 2026-10-22):** DockerOperator checks that the image exists before starting a container, so the
+proxy also enables the `IMAGES` section. Combined with `POST`, that technically permits image pulls and removal as well.
+Exec, volumes, networks, swarm and system stay denied. This is still a local-dev-only posture.
+
+**Implementation note (7b): one lake path everywhere.** The bronze file sink's `_spark_metadata` log stores absolute file
+paths. A lake written at `/Users/…/data/lake` (host) and read at `/data/lake` (container) fails partition discovery.
+All containers therefore mount `./data` at the **same absolute path** as on the host (`PTP_HOST_DATA_DIR` in `.env`), and
+`LAKE_ROOT` is that path in every runtime. With an object store this is automatic (the URI is the same everywhere).
+
 ## Consequences
 
 - `make image` builds the assembly jar and `ptp-jobs`. The image tag is the git commit, so a DAG run is traceable to code.

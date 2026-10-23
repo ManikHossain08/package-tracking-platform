@@ -6,12 +6,19 @@ SELECT 'CREATE ROLE ptp_migrator LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles W
 SELECT 'CREATE ROLE ptp_stream_writer LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ptp_stream_writer') \gexec
 SELECT 'CREATE ROLE ptp_reader LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ptp_reader') \gexec
 SELECT 'CREATE ROLE ptp_batch_writer LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ptp_batch_writer') \gexec
+SELECT 'CREATE ROLE ptp_airflow LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ptp_airflow') \gexec
 
 ALTER ROLE ptp_migrator      WITH LOGIN PASSWORD :'migrator_pw';
 ALTER ROLE ptp_stream_writer WITH LOGIN PASSWORD :'stream_writer_pw';
 ALTER ROLE ptp_reader        WITH LOGIN PASSWORD :'reader_pw';
 ALTER ROLE ptp_batch_writer  WITH LOGIN PASSWORD :'batch_writer_pw';
+ALTER ROLE ptp_airflow       WITH LOGIN PASSWORD :'airflow_pw';
 
 -- The migrator owns the application schemas; the others get grants from the migrations.
 SELECT format('GRANT CONNECT, CREATE ON DATABASE %I TO ptp_migrator', current_database()) \gexec
 SELECT format('GRANT CONNECT ON DATABASE %I TO ptp_stream_writer, ptp_reader, ptp_batch_writer', current_database()) \gexec
+
+-- Airflow metadata (SC-0006 B): its own database, owned by ptp_airflow, with no rights in the application database.
+SELECT 'CREATE DATABASE airflow OWNER ptp_airflow' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow') \gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', current_database()) \gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO ptp_migrator, ptp_stream_writer, ptp_reader, ptp_batch_writer', current_database()) \gexec
