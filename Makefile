@@ -121,7 +121,7 @@ verify-processor: ## AC-7.6: containerised processor reconciles a run and stops 
 airflow-up: env ## Start Airflow + docker-proxy (profile orchestration); UI on http://127.0.0.1:8080 (admin, AIRFLOW_ADMIN_PASSWORD)
 	@mkdir -p data/airflow/auth && set -a && . ./.env && set +a && \
 	  python3 -c 'import json,os; print(json.dumps({"admin": os.environ["AIRFLOW_ADMIN_PASSWORD"]}))' > data/airflow/auth/passwords.json && \
-	  chmod 644 data/airflow/auth/passwords.json  # readable by the Airflow container's uid; local dev only
+	  chmod 666 data/airflow/auth/passwords.json  # Airflow (uid 50000) opens it read-write to lock it; local dev only
 	$(COMPOSE) --profile core --profile orchestration up -d --wait --wait-timeout 300 airflow
 
 airflow-down: ## Stop Airflow and the docker proxy

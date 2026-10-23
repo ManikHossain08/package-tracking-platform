@@ -134,8 +134,8 @@ class DqIT extends AnyFunSuite with BeforeAndAfterEach {
     // DQ-06: a DLQ record that has no invalid bronze row behind it (critical).
     produce(t.dlq, Seq("x" -> s"""{"dlq_schema_version":"1.0","error_code":"INVALID_JSON","errors":[{"code":"INVALID_JSON","field":null,"message":"planted"}],
       |"raw_value":"{","raw_value_encoding":"utf8","source":{"topic":"${t.events}","partition":0,"offset":999999,
-      |"kafka_timestamp":"${Instant.now()}","key":null},"processor":{"name":"planted","version":"0","run_id":"x","batch_id":0},
-      |"rejected_at":"${Instant.now()}"}""".stripMargin.replace("\n", "").getBytes(UTF_8)))
+      |"kafka_timestamp":"${iso(Instant.now())}","key":null},"processor":{"name":"planted","version":"0","run_id":"x","batch_id":0},
+      |"rejected_at":"${iso(Instant.now())}"}""".stripMargin.replace("\n", "").getBytes(UTF_8)))
     expect(Map("DQ-04" -> "warn", "DQ-05" -> "warn", "DQ-06" -> "fail"), exit = 1, "DQ-06" -> (_ == "dlq-only 0:999999"))
 
     // DQ-03: records waiting in Kafka, and no commit for longer than 15 minutes (high → exit 1).

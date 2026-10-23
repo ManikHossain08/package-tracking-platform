@@ -11,6 +11,8 @@ fail() { echo "FAIL $1"; failures=$((failures + 1)); }
 sql() { $COMPOSE exec -T postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"$1\""; }
 dagtest() { $DC exec -T airflow airflow dags test "$@" >/tmp/ptp-dagtest.log 2>&1; }
 TODAY=$(date -u +%F)
+# Lake files belong to the jobs image's user (spark); on Linux the host user cannot write there, so edit as that user.
+as_jobs() { docker run --rm --network none -v "$PTP_HOST_DATA_DIR:$PTP_HOST_DATA_DIR" --entrypoint "$1" ptp-jobs:local "${@:2}"; }
 
 # AC-7.7: healthy, bound to localhost only, password auth, separate metadata database.
 $DC up -d --wait --wait-timeout 300 airflow >/dev/null 2>&1 && pass "AC-7.7 airflow healthy" || fail "AC-7.7 airflow not healthy"
@@ -36,13 +38,13 @@ if dagtest lake_daily "$TODAY"; then
     && pass "AC-7.9 lake_daily succeeded; new ops.gold_runs and ops.dq_results rows" || fail "AC-7.9 lake_daily ran but wrote no runs"
 else fail "AC-7.9 lake_daily failed (see /tmp/ptp-dagtest.log in the airflow container)"; fi
 part="$PTP_HOST_DATA_DIR/lake/silver/package_events/event_date=$TODAY"
-file=$(ls "$part"/*.parquet | head -1); dup="$part/part-planted-duplicate.parquet"; cp "$file" "$dup"
+file=$(ls "$part"/*.parquet | head -1); dup="$part/part-planted-duplicate.parquet"; as_jobs cp "$file" "$dup"
 if dagtest lake_daily "$TODAY"; then fail "AC-7.9 lake_daily succeeded despite a planted DQ-02 fault"
 else
   [[ "$(sql "SELECT status FROM ops.dq_results WHERE check_id = 'DQ-02' ORDER BY checked_at DESC LIMIT 1")" == fail ]] \
     && pass "AC-7.9 planted critical fault fails the run at dq (DQ-02 = fail)" || fail "AC-7.9 run failed, but not at DQ-02"
 fi
-rm -f "$dup"
+as_jobs rm -f "$dup"
 
 # AC-7.10: replay through Airflow; invalid params fail before Spark (no new ops.replay_runs row).
 runs_before=$(sql "SELECT count(*) FROM ops.replay_runs")

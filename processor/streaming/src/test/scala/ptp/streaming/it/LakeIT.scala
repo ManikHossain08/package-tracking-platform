@@ -48,8 +48,8 @@ class LakeIT extends AnyFunSuite with BeforeAndAfterEach {
 
   private def lateEvent(pkg: String, tpe: String, at: Instant, id: String, extra: String,
                         system: String = "DC_SCANNER"): (String, Array[Byte]) =
-    pkg -> s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"$at",
-              |"emitted_at":"${Instant.now()}","source":{"system":"$system","device_id":"device-it-01","sequence":1}$extra}"""
+    pkg -> s"""{"event_id":"$id","schema_version":"1.0","package_id":"$pkg","event_type":"$tpe","event_time":"${iso(at)}",
+              |"emitted_at":"${iso(Instant.now())}","source":{"system":"$system","device_id":"device-it-01","sequence":1}$extra}"""
       .stripMargin.replace("\n", "").getBytes(UTF_8)
 
   test("AC-6.1/6.2/6.3 silver = the unique valid events, earliest copy kept, typed with lineage", Integration,
