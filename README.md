@@ -75,6 +75,15 @@ flowchart LR
 
 Solid arrows carry data; dotted arrows are recovery, metrics, or shared code.
 
+### Interactive architecture map
+
+[![Interactive system map: click a component to see its upstream and downstream](docs/architecture/img/system-map.png)](https://manikhossain08.github.io/package-tracking-platform/architecture/)
+
+**[Open the interactive map](https://manikhossain08.github.io/package-tracking-platform/architecture/)**: click any component to see
+what it does, what feeds it and what it feeds, or trace the real-time, batch, recovery or metrics
+path on its own. The page is [docs/architecture/index.html](docs/architecture/index.html), served
+by GitHub Pages; you can also open that file directly in a browser.
+
 ### Components
 
 | Component | What it does | Upstream (feeds it) | Downstream (it feeds) |
