@@ -3,6 +3,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 COMPOSE := docker compose --project-directory infra -f infra/docker-compose.yml --env-file .env
+ALL_PROFILES := --profile core --profile stream --profile orchestration --profile obs
 VENV    := .venv
 PY      := $(VENV)/bin/python
 GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
@@ -24,8 +25,8 @@ up: env ## Start the core stack, create topics, roles and schema (AC-0.1)
 	set -a; . ./.env; set +a; COMPOSE="$(COMPOSE)" infra/postgres/bootstrap-roles.sh
 	$(COMPOSE) --profile core run --rm pg-migrate
 
-down: ## Stop the stack, keep volumes
-	$(COMPOSE) --profile core down
+down: ## Stop every service in every profile (core, stream, orchestration, obs), keep volumes (SC-0008 A)
+	$(COMPOSE) $(ALL_PROFILES) down
 
 reset: ## Stop the stack and DELETE its volumes (asks first)
 	@read -p "Delete Kafka and Postgres volumes? [y/N] " ans; [ "$$ans" = y ] && $(COMPOSE) --profile core down -v || echo "aborted"
