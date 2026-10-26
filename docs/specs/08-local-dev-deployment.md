@@ -29,7 +29,7 @@ No cloud account and no paid service are needed.
 | Target | Purpose | Status |
 |---|---|---|
 | `make env` | Create `.env` from `.env.example` with a random Postgres password (never overwrites) | ✅ |
-| `make up` / `make down` | Start the `core` stack and wait for health (120 s bound) / stop, keep volumes | ✅ |
+| `make up` / `make down` | Start the `core` stack and wait for health (120 s bound) / stop every service in all profiles (`core`, `stream`, `orchestration`, `obs`), keep volumes (SC-0008 A) | ✅ |
 | `make reset` | Stop and delete volumes (asks for confirmation) | ✅ |
 | `make ps` / `make logs` | Stack status / follow logs | ✅ |
 | `make verify` | Topic settings, disabled auto-create, init idempotency, Postgres reachability | ✅ |

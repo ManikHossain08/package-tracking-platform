@@ -25,7 +25,7 @@
 | FR-STO-01 | P1 | 01, 02 §5 | 0006 | `BronzeWriter.scala` (`BronzeRow`), `BestEffortFields.scala` | TS-I-05 ✅ (AC-5.1–5.3), TS-R-08 ✅ (AC-5.4), live run ✅ | ✅ Verified |
 | FR-STO-02 | P1 | 01, 02 §5 | SC-0005 A | `ptp/lake/SilverBuild.scala`, `core/gold/ContentHash.scala` | TS-D-04 ✅ (AC-6.1–6.5), live run ✅ | ✅ Verified |
 | FR-ANL-01 | P1 | 01, 02 §4 | 0005, SC-0005 B/C | `ptp/lake/GoldLoad.scala`, `core/gold/GoldRules.scala`, migration V5 | TS-D-03 ✅ (AC-6.6–6.9), GoldRulesSpec ✅, live run ✅ | ✅ Verified |
-| FR-ANL-02 | P1 | 01 | SC-0005 B | `sql/analytics/01–05*.sql`, `make query` | TS-D-05 ✅ (AC-6.10, as `ptp_reader`) | ✅ Verified |
+| FR-ANL-02 | P1 | 01 | SC-0005 B | `sql/analytics/01–05*.sql`, `make query` | TS-D-05 ✅ (AC-6.10, as `ptp_reader`; empty window, SC-0008 B) | ✅ Verified |
 | FR-REC-01 | P0 | 01, 06 | 0002 | checkpoint per query; idempotent sink | TS-R-01 ✅ (crash after sink commit, re-run batch 3, attempts = 2); TS-R-05 pending | ✅ Verified (TS-R-05 pending) |
 | FR-REC-02 | P1 | 01, 03 | 0006, 0005 (SC-0004) | `Replay.scala`, `StatusApply.scala`, `ops.replay_runs` (V4) | TS-R-04 ✅ (AC-5.5–5.7), ClassifySpec ✅, live data-loss rebuild ✅, `replay_from_bronze` DAG ✅ (TS-O-02) | ✅ Verified |
 | FR-REC-03 | P1 | 01, 06 | 0002 | — | TS-R-02 | Specified |

@@ -25,13 +25,13 @@ class AnalyticsQueryPackIT extends AnyFunSuite {
   }
 
   /** Runs a pack file as ptp_reader, binding :'from_date' / :'to_date'. Rows as "a|b|c" strings (NULL as "null"). */
-  private def run(file: String): Seq[String] = {
+  private def run(file: String, from: Date = From, to: Date = To): Seq[String] = {
     val text  = Files.readString(repoRoot.resolve(s"sql/analytics/$file"))
     val binds = """:'(from_date|to_date)'""".r.findAllMatchIn(text).map(_.group(1)).toSeq
     val sql   = text.replaceAll(""":'(from_date|to_date)'""", "?")
     Using.resource(PostgresStatusSink.connect(reader)) { c =>
       Using.resource(c.prepareStatement(sql)) { ps =>
-        binds.zipWithIndex.foreach { case (b, i) => ps.setDate(i + 1, if (b == "from_date") From else To) }
+        binds.zipWithIndex.foreach { case (b, i) => ps.setDate(i + 1, if (b == "from_date") from else to) }
         val rs = ps.executeQuery()
         val n  = rs.getMetaData.getColumnCount
         Iterator.continually(rs).takeWhile(_.next()).map(r => (1 to n).map(i => String.valueOf(r.getObject(i))).mkString("|")).toVector
@@ -52,6 +52,18 @@ class AnalyticsQueryPackIT extends AnyFunSuite {
     assert(run("04_facility_throughput.sql") == Seq("DC-YUL01|6|3|1|3.00", "DC-YYZ01|3|1|2|1.50"))
     // 1/10 = 10%, 3/20 = 15%, range (1+3)/(10+20) = 13.33%.
     assert(run("05_exception_rate.sql") == Seq("2026-10-20|10|1|10.00", "2026-10-21|20|3|15.00", "null|30|4|13.33"))
+  }
+
+  test("SC-0008 B: a window with no data returns empty results or NULL rates, never an error", Integration, Req("FR-ANL-02")) {
+    reset()
+    loadFixture()
+    val (emptyFrom, emptyTo) = (Date.valueOf("2026-11-01"), Date.valueOf("2026-11-02"))
+    // ROLLUP / GROUPING SETS (()) still emit their total row on empty input: counts 0 (or NULL sums), rate NULL.
+    assert(run("01_on_time_rate.sql", emptyFrom, emptyTo) == Seq("null|0|0|null"))
+    assert(run("02_delay_percentiles.sql", emptyFrom, emptyTo).isEmpty)
+    assert(run("03_facility_dwell.sql", emptyFrom, emptyTo).isEmpty)
+    assert(run("04_facility_throughput.sql", emptyFrom, emptyTo).isEmpty)
+    assert(run("05_exception_rate.sql", emptyFrom, emptyTo) == Seq("null|null|null|null"))
   }
 
   test("ptp_reader cannot modify analytics or read ops staging", Integration, Req("NFR-06")) {

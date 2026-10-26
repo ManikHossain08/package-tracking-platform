@@ -101,7 +101,7 @@ and the generator's expected-gold files. Silver comparisons ignore `silver_run_i
 | AC-6.7 | **Consistency (DQ-08):** Σ `delivered_count` = rows in `delivery_facts` = packages whose `package_status` is `DELIVERED` and that have a `CREATED` event, for the window | FR-ANL-01, DQ-08 | TS-D-03 |
 | AC-6.8 | **Atomic, idempotent load:** re-running the same window gives identical rows (excluding `computed_at`, `run_id`). A load failing mid-way leaves the previous gold rows intact. Every run is logged in `ops.gold_runs`. | FR-ANL-01, NFR-01 | TS-D-03 |
 | AC-6.9 | **Recompute window:** a late `DELIVERED` whose delivery date is inside the 7-day window changes gold on the next run; facts older than the window are unchanged | FR-ANL-01, FR-LATE-01 | TS-D-03 |
-| AC-6.10 | **SQL query pack:** every query in `sql/analytics/` (on-time %, delay percentiles, dwell, throughput, exception rate) runs as `ptp_reader` and returns hand-computed expected results on a small fixed fixture | FR-ANL-02 | TS-D-05 |
+| AC-6.10 | **SQL query pack:** every query in `sql/analytics/` (on-time %, delay percentiles, dwell, throughput, exception rate) runs as `ptp_reader` and returns hand-computed expected results on a small fixed fixture. A window with no data returns empty results or NULL rates, never an error (SC-0008 B) | FR-ANL-02 | TS-D-05 |
 
 ## Step 7 (data-quality job + orchestration) — acceptance criteria
 

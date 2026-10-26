@@ -4,7 +4,7 @@ SELECT facility_id,
        sum(arrivals)         AS arrivals,
        sum(departures)       AS departures,
        sum(exception_count)  AS exceptions,
-       round(sum(arrivals)::numeric / (:'to_date'::date - :'from_date'::date + 1), 2) AS avg_arrivals_per_day
+       round(sum(arrivals)::numeric / NULLIF(:'to_date'::date - :'from_date'::date + 1, 0), 2) AS avg_arrivals_per_day
 FROM analytics.daily_facility_performance
 WHERE activity_date BETWEEN :'from_date'::date AND :'to_date'::date
 GROUP BY facility_id
